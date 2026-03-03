@@ -9,10 +9,15 @@ import { motion, AnimatePresence } from "framer-motion";
 // Public tabs always visible
 const publicTabs = [
 	{ label: "Feed", to: "/feed" },
+	{ label: "Launch", to: "/launch" },
+	{ label: "Leaderboard", to: "/leaderboard" },
 ];
 
 // Authenticated-only tabs
-const privateTabs: { label: string; to: string }[] = [];
+const privateTabs = [
+	{ label: "Transactions", to: "/transactions" },
+	{ label: "Profile", to: "/profile" },
+];
 
 export default function Navbar() {
 	const { isAuthenticated } = useAuth();
@@ -53,7 +58,7 @@ export default function Navbar() {
 				<div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 					<div className="flex h-16 items-center justify-between">
 						{/* Left section: Logo + Nav */}
-						<div className="flex items-center gap-6 sm:gap-8">
+						<div className="flex items-center gap-8 sm:gap-12 w-full md:w-auto">
 							<Link
 								to="/home"
 								className="relative pb-1 flex shrink-0 items-center gap-2 z-50 transition-all duration-300 font-extrabold text-lg sm:text-xl tracking-tight text-white"
@@ -68,13 +73,13 @@ export default function Navbar() {
 								)}
 							</Link>
 
-							{/* Nav Links */}
-							<nav className="flex items-center gap-4 sm:gap-1">
+							{/* Nav Links (Desktop) */}
+							<nav className="hidden md:flex flex-1 items-center gap-4 lg:gap-8 bg-white/5 border border-white/10 px-6 py-2 rounded-full">
 								{publicTabs.map((tab) => (
 									<Link
 										key={tab.to}
 										to={tab.to}
-										className="relative pb-1 transition-all duration-300 font-extrabold text-lg sm:text-xl tracking-tight text-white"
+										className="relative px-3 py-1 transition-all duration-300 font-bold text-sm lg:text-base tracking-wide text-white/70 hover:text-white"
 									>
 										{tab.label}
 										{isActive(tab.to) && (
@@ -92,10 +97,10 @@ export default function Navbar() {
 											key={tab.label}
 											to={tab.to}
 											className={
-												"relative px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 " +
+												"relative px-3 py-1 ml-2 rounded-full font-bold text-sm lg:text-base tracking-wide transition-all duration-300 " +
 												(isActive(tab.to)
-													? "text-white bg-white/10"
-													: "text-white/60 hover:text-white hover:bg-white/5")
+													? "text-white bg-white/20"
+													: "text-white/70 hover:text-white hover:bg-white/10")
 											}
 										>
 											{tab.label}
@@ -109,10 +114,18 @@ export default function Navbar() {
 
 						{/* Right section */}
 						<div className="flex shrink-0 items-center gap-2 sm:gap-3 z-50">
-							{isAuthenticated && (
+							{isAuthenticated ? (
 								<div className="hidden sm:flex items-center gap-2">
 									<UserProfile />
 								</div>
+							) : (
+								<Link
+									to="/signin"
+									search={{ redirect: undefined }}
+									className="hidden sm:inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium text-white/80 hover:text-white border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all duration-200"
+								>
+									Sign In
+								</Link>
 							)}
 							
 							<div className="flex items-center gap-2">
@@ -169,7 +182,7 @@ export default function Navbar() {
 									</Link>
 								))}
 								
-								{isAuthenticated && (
+								{isAuthenticated ? (
 									<>
 										<div className="h-px bg-white/5 my-2 mx-4" />
 										{privateTabs.map((tab) => (
@@ -194,6 +207,17 @@ export default function Navbar() {
 												<span className="text-white/60 font-medium">Profile</span>
 											</div>
 										</div>
+									</>
+								) : (
+									<>
+										<div className="h-px bg-white/5 my-2 mx-4" />
+										<Link
+											to="/signin"
+											search={{ redirect: undefined }}
+											className="flex items-center px-4 py-3 rounded-lg text-base font-medium text-white/60 active:bg-white/5 transition-all"
+										>
+											Sign In
+										</Link>
 									</>
 								)}
 
