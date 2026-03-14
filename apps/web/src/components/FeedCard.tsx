@@ -73,11 +73,9 @@ export default function FeedCard({ post, className, onTrade }: FeedCardProps) {
           )}
         </div>
 
-        {/* Title & Link to Reddit */}
+        {/* Title links to market details */}
         <a
-          href={post.redditUrl || "#"}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={`/token/${post.id}`}
           className="group/link block"
         >
           <h3 className="mb-3 line-clamp-2 text-lg font-semibold leading-snug text-white/90 transition-colors group-hover/link:text-white">
@@ -85,12 +83,10 @@ export default function FeedCard({ post, className, onTrade }: FeedCardProps) {
           </h3>
         </a>
 
-        {/* Media & Link to Reddit */}
+        {/* Media links to market details */}
         {post.imageUrl && (
           <a
-            href={post.redditUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/token/${post.id}`}
             className="mb-4 block overflow-hidden rounded-xl bg-neutral-800"
           >
             <motion.img
@@ -99,6 +95,18 @@ export default function FeedCard({ post, className, onTrade }: FeedCardProps) {
               className="h-48 w-full object-cover transition-transform duration-500 group-hover:scale-105"
               loading="lazy"
             />
+          </a>
+        )}
+
+        {/* Optional source link to original Reddit post */}
+        {post.redditUrl && (
+          <a
+            href={post.redditUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-3 inline-block text-xs text-white/50 hover:text-white/80"
+          >
+            View source on Reddit
           </a>
         )}
       </div>
@@ -124,6 +132,13 @@ export default function FeedCard({ post, className, onTrade }: FeedCardProps) {
               </div>
             </div>
           )}
+          <Link
+            to="/token/$tokenId"
+            params={{ tokenId: post.id }}
+            className="inline-flex h-8 items-center rounded-lg border border-blue-400/30 bg-blue-500/15 px-3 text-xs font-medium text-blue-200 transition-colors hover:bg-blue-500/25"
+          >
+            Visit Market
+          </Link>
           <Button
             size="sm"
             variant="secondary"

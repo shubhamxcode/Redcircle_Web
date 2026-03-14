@@ -17,10 +17,11 @@ const router = Router();
  */
 router.post("/buy", authenticateToken, async (req, res) => {
   try {
-    const { postId, amountInSOL, walletAddress } = req.body;
+    const { postId, walletAddress } = req.body;
+    const amountInSOL = req.body.amountInSOL ?? req.body.amount;
 
     // Validation
-    if (!postId || !amountInSOL || !walletAddress) {
+    if (!postId || amountInSOL === undefined || amountInSOL === null || !walletAddress) {
       return res.status(400).json({
         error: "Missing required fields: postId, amountInSOL, walletAddress",
       });
@@ -39,11 +40,12 @@ router.post("/buy", authenticateToken, async (req, res) => {
       buyerWalletAddress: walletAddress,
       amountInSOL: parseFloat(amountInSOL),
     });
+    const { success: _buySuccess, ...buyPayload } = result;
 
     res.json({
       success: true,
       message: "Transaction prepared. Please sign with your wallet.",
-      ...result,
+      ...buyPayload,
     });
   } catch (error: any) {
     console.error("❌ Buy tokens error:", error);
@@ -80,13 +82,14 @@ router.post("/sell", authenticateToken, async (req, res) => {
     const result = await sellTokens({
       postId,
       sellerWalletAddress: walletAddress,
-      amount: parseInt(amount),
+      amountInTokens: parseInt(amount),
     });
+    const { success: _sellSuccess, ...sellPayload } = result;
 
     res.json({
       success: true,
       message: "Transaction prepared. Please sign with your wallet.",
-      ...result,
+      ...sellPayload,
     });
   } catch (error: any) {
     console.error("❌ Sell tokens error:", error);

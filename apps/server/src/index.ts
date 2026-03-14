@@ -45,7 +45,7 @@ app.get("/health", (_req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
 	console.error("\n❌ === Global Error Handler ===");
 	console.error("Error:", err);
 	console.error("Path:", req.path);

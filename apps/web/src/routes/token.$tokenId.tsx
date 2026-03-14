@@ -2,12 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth";
 import { motion } from "motion/react";
-import { ArrowLeft, ExternalLink, TrendingUp, Users, Activity, DollarSign } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import PriceChart from "@/components/PriceChart";
-import TradingModal from "@/components/TradingModal";
+import MarketChart from "@/components/MarketChart";
+import RecentTradesList from "@/components/RecentTradesList";
+import TopCuratorsList from "@/components/TopCuratorsList";
+import MarketTradePanel from "@/components/MarketTradePanel";
 import type { FeedPost } from "@/components/FeedCard";
-import { cn } from "@/lib/utils";
+import { useMarketDemoState } from "@/hooks/useMarketDemoState";
 
 export const Route = createFileRoute("/token/$tokenId")({
   component: TokenDetailsPage,
@@ -19,7 +21,12 @@ function TokenDetailsPage() {
   const [post, setPost] = useState<FeedPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showTradingModal, setShowTradingModal] = useState(false);
+  const {
+    marketStats,
+    chartPoints,
+    recentTrades,
+    topCurators,
+  } = useMarketDemoState(post?.id, parseFloat(post?.initialPrice || "0.001"));
 
   useEffect(() => {
     const fetchTokenDetails = async () => {
@@ -36,7 +43,7 @@ function TokenDetailsPage() {
 
         setPost(data.post);
       } catch (err) {
-        console.error("❌ Error fetching token details:", err);
+        console.error(" Error fetching token details:", err);
         setError(err instanceof Error ? err.message : "Failed to load token");
       } finally {
         setLoading(false);
@@ -75,186 +82,118 @@ function TokenDetailsPage() {
     );
   }
 
-  const priceChange = post.tokenPrice && post.initialPrice 
-    ? ((post.tokenPrice - parseFloat(post.initialPrice)) / parseFloat(post.initialPrice) * 100).toFixed(2)
-    : "0";
-  const isPositive = parseFloat(priceChange) >= 0;
+  const livePrice = marketStats?.currentPrice ?? post.tokenPrice ?? 0;
+  const postImage = post.imageUrl;
+  const postSourceLabel = (() => {
+    if (!post.redditUrl) return "source unavailable";
+    try {
+      const url = new URL(post.redditUrl);
+      return url.hostname.replace("www.", "");
+    } catch {
+      return "reddit.com";
+    }
+  })();
 
   return (
-    <div className="relative min-h-screen pt-24 px-6 pb-20">
-      <div className="mx-auto w-full max-w-6xl">
+    <div className="relative min-h-screen pt-24 px-4 pb-14">
+      <div className="mx-auto w-full max-w-[1400px]">
         {/* Back Button */}
         <Button
           onClick={() => navigate({ to: "/" })}
           variant="ghost"
-          className="mb-6 text-white/70 hover:text-white"
+          className="mb-4 text-white/70 hover:text-white"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Left Column - Token Info */}
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
+          {/* Left Column */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="lg:col-span-1 space-y-6"
+            className="space-y-4"
           >
-            {/* Token Header Card */}
-            <div className="rounded-3xl border border-white/10 bg-black/60 p-6 backdrop-blur-xl">
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold text-white">{post.tokenSymbol}</h1>
-                  <p className="mt-1 text-sm text-white/60">Token</p>
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl">
+              <div className="p-4">
+                <div className="mb-2 text-sm font-semibold text-white">{post.tokenSymbol}</div>
+                <div className="mb-2 text-xs text-white/60">r/{post.subreddit} • u/{post.author}</div>
+                <h2 className="line-clamp-3 text-sm text-white/85">{post.title}</h2>
+              </div>
+              {postImage ? (
+                <a href={post.redditUrl || "#"} target="_blank" rel="noopener noreferrer" className="block">
+                  <img src={postImage} alt={post.title} className="h-[300px] w-full object-cover" />
+                </a>
+              ) : (
+                <div className="flex h-[300px] items-center justify-center bg-white/5 text-sm text-white/40">
+                  No preview image
                 </div>
-                <div
-                  className={cn(
-                    "rounded-2xl px-3 py-1.5 text-xs font-semibold",
-                    post.status === "active"
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-yellow-500/20 text-yellow-400"
-                  )}
+              )}
+              <div className="border-t border-white/10 p-3">
+                <a
+                  href={post.redditUrl || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200"
                 >
-                  {post.status}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <div className="text-3xl font-bold text-white">
-                    {post.tokenPrice?.toFixed(6) || "0.000000"} SOL
-                  </div>
-                  <div
-                    className={cn(
-                      "mt-1 text-sm font-semibold",
-                      isPositive ? "text-green-400" : "text-red-400"
-                    )}
-                  >
-                    {isPositive ? "+" : ""}
-                    {priceChange}%
-                  </div>
-                </div>
-
-                <Button
-                  onClick={() => setShowTradingModal(true)}
-                  className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 py-6 text-lg font-semibold hover:from-purple-700 hover:to-blue-700"
-                >
-                  Trade Now
-                </Button>
-
-                {post.tokenMintAddress && (
-                  <a
-                    href={`https://solscan.io/token/${post.tokenMintAddress}?cluster=devnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    View on Solscan
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                )}
+                  Open on Reddit
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             </div>
 
-            {/* Stats Card */}
-            <div className="rounded-3xl border border-white/10 bg-black/60 p-6 backdrop-blur-xl">
-              <h3 className="mb-4 text-lg font-semibold text-white">Token Stats</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-white/60">
-                    <Activity className="h-4 w-4" />
-                    <span className="text-sm">Volume 24h</span>
-                  </div>
-                  <span className="font-semibold text-white">
-                    {post.volume24h?.toFixed(3) || "0.000"} SOL
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-white/60">
-                    <DollarSign className="h-4 w-4" />
-                    <span className="text-sm">Market Cap</span>
-                  </div>
-                  <span className="font-semibold text-white">
-                    {post.marketCap?.toFixed(2) || "0.00"} SOL
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-white/60">
-                    <Users className="h-4 w-4" />
-                    <span className="text-sm">Holders</span>
-                  </div>
-                  <span className="font-semibold text-white">{post.holders || 0}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-white/60">
-                    <TrendingUp className="h-4 w-4" />
-                    <span className="text-sm">Total Supply</span>
-                  </div>
-                  <span className="font-semibold text-white">
-                    {post.totalSupply?.toLocaleString() || "N/A"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Post Info Card */}
-            <div className="rounded-3xl border border-white/10 bg-black/60 p-6 backdrop-blur-xl">
-              <h3 className="mb-4 text-lg font-semibold text-white">Original Post</h3>
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium text-white">{post.title}</h4>
-                <div className="flex items-center gap-3 text-xs text-white/60">
-                  <span>r/{post.subreddit}</span>
-                  <span>•</span>
-                  <span>u/{post.author}</span>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-white/50">
-                  <span>↑ {post.upvotes}</span>
-                  <span>💬 {post.comments}</span>
-                </div>
-                {post.redditUrl && (
-                  <a
-                    href={post.redditUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs text-blue-400 hover:text-blue-300"
-                  >
-                    View on Reddit
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-            </div>
+            <TopCuratorsList curators={topCurators} />
           </motion.div>
 
-          {/* Right Column - Chart */}
+          {/* Middle Column */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="lg:col-span-2"
+            className="space-y-4"
           >
-            <PriceChart
-              postId={post.id}
-              currentPrice={post.tokenPrice || 0}
+            <div className="grid grid-cols-5 overflow-hidden rounded-2xl border border-white/10 bg-black/70 text-sm backdrop-blur-xl">
+              <div className="border-r border-white/10 p-3">
+                <div className="text-xs text-white/50">Market Cap</div>
+                <div className="mt-1 font-semibold text-white">{(marketStats?.marketCap ?? 0).toFixed(2)}</div>
+              </div>
+              <div className="border-r border-white/10 p-3">
+                <div className="text-xs text-white/50">Rank</div>
+                <div className="mt-1 font-semibold text-white">2</div>
+              </div>
+              <div className="border-r border-white/10 p-3">
+                <div className="text-xs text-white/50">Holders</div>
+                <div className="mt-1 font-semibold text-white">{marketStats?.holders ?? 0}</div>
+              </div>
+              <div className="border-r border-white/10 p-3">
+                <div className="text-xs text-white/50">Author</div>
+                <div className="mt-1 font-semibold text-white">{post.author}</div>
+              </div>
+              <div className="p-3">
+                <div className="text-xs text-white/50">Source</div>
+                <div className="mt-1 font-semibold text-white">{postSourceLabel}</div>
+              </div>
+            </div>
+
+            <MarketChart
+              points={chartPoints}
+              currentPrice={livePrice}
               initialPrice={parseFloat(post.initialPrice || "0.001")}
-              tokenSymbol={post.tokenSymbol}
             />
+            <RecentTradesList trades={recentTrades} />
+          </motion.div>
+
+          {/* Right Column */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <MarketTradePanel tokenSymbol={post.tokenSymbol} />
           </motion.div>
         </div>
       </div>
-
-      {/* Trading Modal */}
-      {showTradingModal && (
-        <TradingModal
-          post={post}
-          isOpen={showTradingModal}
-          onClose={() => setShowTradingModal(false)}
-        />
-      )}
     </div>
   );
 }

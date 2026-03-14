@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import type { FeedPost } from "@/components/FeedCard";
 import { cn } from "@/lib/utils";
-import { fetchWithAuth, getApiUrl } from "@/lib/auth";
+import { fetchWithAuth } from "@/lib/auth";
 import { Buffer } from 'buffer';
 
 type TradeType = "buy" | "sell";
@@ -137,17 +137,26 @@ export default function TradingModal({ post, isOpen, onClose }: TradingModalProp
       // Step 1: Request transaction from backend
       console.log(`🔄 Preparing ${tradeType} transaction...`);
       const endpoint = tradeType === "buy" ? "/api/trading/buy" : "/api/trading/sell";
+      const requestBody =
+        tradeType === "buy"
+          ? {
+              postId: post.id,
+              amountInSOL: parseFloat(amount),
+              amount: parseFloat(amount),
+              walletAddress,
+            }
+          : {
+              postId: post.id,
+              amount: parseInt(amount, 10),
+              walletAddress,
+            };
       
       const response = await fetchWithAuth(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          postId: post.id,
-          amount: parseInt(amount),
-          walletAddress,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -160,7 +169,7 @@ export default function TradingModal({ post, isOpen, onClose }: TradingModalProp
       console.log(`   Cost: ${data.cost?.toFixed(6)} SOL`);
 
       // Step 2: Deserialize partially-signed transaction
-      const { Transaction, VersionedTransaction } = await import("@solana/web3.js");
+      const { Transaction } = await import("@solana/web3.js");
       const transactionBuffer = Buffer.from(data.transaction, "base64");
       const transaction = Transaction.from(transactionBuffer);
 
@@ -210,6 +219,7 @@ export default function TradingModal({ post, isOpen, onClose }: TradingModalProp
           type: tradeType,
           amount: tradePreview.tokenAmount,
           price: tradePreview.finalTotal,
+          walletAddress,
         }),
       });
 
