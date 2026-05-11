@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { getUser, getAuthToken, setUser, setAuthToken, removeAuthToken, type User } from "../lib/auth";
 
 interface AuthContextType {
@@ -70,4 +70,3 @@ export function useAuth() {
   }
   return context;
 }
-

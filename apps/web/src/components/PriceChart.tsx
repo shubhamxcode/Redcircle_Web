@@ -1,14 +1,25 @@
-import { useState, useEffect } from "react";
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { motion } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CandlestickSeries,
+  ColorType,
+  HistogramSeries,
+  createChart,
+  type UTCTimestamp,
+} from "lightweight-charts";
 import { TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiUrl } from "@/lib/auth";
 
-interface PriceDataPoint {
-  timestamp: number;
-  price: number;
+type Candle = {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
   volume: number;
-}
+};
+
+type Timeframe = "1m" | "5m" | "15m" | "1h" | "1d";
 
 interface PriceChartProps {
   postId: string;
@@ -18,6 +29,8 @@ interface PriceChartProps {
   className?: string;
 }
 
+const TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "1h", "1d"];
+
 export default function PriceChart({
   postId,
   currentPrice,
@@ -25,85 +38,123 @@ export default function PriceChart({
   tokenSymbol = "TOKEN",
   className,
 }: PriceChartProps) {
-  const [priceData, setPriceData] = useState<PriceDataPoint[]>([]);
-  const [timeframe, setTimeframe] = useState<"1H" | "24H" | "7D" | "ALL">("24H");
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const [candles, setCandles] = useState<Candle[]>([]);
+  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
   const [loading, setLoading] = useState(true);
 
-  // Calculate price change
   const priceChange = currentPrice - initialPrice;
-  const priceChangePercent = ((priceChange / initialPrice) * 100).toFixed(2);
+  const priceChangePercent =
+    initialPrice > 0 ? ((priceChange / initialPrice) * 100).toFixed(2) : "0.00";
   const isPositive = priceChange >= 0;
 
   useEffect(() => {
-    const fetchPriceHistory = async () => {
+    const fetchCandles = async () => {
       setLoading(true);
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/api/price-history/${postId}?timeframe=${timeframe}`,
-          {
-            credentials: "include",
-          }
+          `${getApiUrl()}/api/trading/candles/${postId}?timeframe=${timeframe}`,
+          { credentials: "include" }
         );
         const result = await response.json();
-
-        if (result.success && result.data) {
-          const formattedData = result.data.map((point: any) => ({
-            timestamp: new Date(point.timestamp).getTime(),
-            price: point.price,
-            volume: point.volume,
-          }));
-          setPriceData(formattedData);
-        } else {
-          // Fallback to generating data if API fails or returns no data
-          console.warn("Using synthetic price data");
-          setPriceData([]);
-        }
+        setCandles(result.success ? result.candles || [] : []);
       } catch (error) {
-        console.error("❌ Error fetching price history:", error);
-        setPriceData([]);
+        console.error("Error fetching RedCircle candles:", error);
+        setCandles([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPriceHistory();
+    void fetchCandles();
   }, [postId, timeframe]);
 
-  const formatXAxis = (timestamp: number) => {
-    const date = new Date(timestamp);
-    if (timeframe === "1H") {
-      return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-    } else if (timeframe === "24H") {
-      return date.toLocaleTimeString("en-US", { hour: "2-digit" });
-    } else if (timeframe === "7D") {
-      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    } else {
-      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    }
-  };
+  const chartData = useMemo(
+    () =>
+      candles.map((candle) => ({
+        time: Math.floor(new Date(candle.timestamp).getTime() / 1000) as UTCTimestamp,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      })),
+    [candles]
+  );
 
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="rounded-2xl border border-white/10 bg-black/90 p-4 backdrop-blur-xl">
-          <p className="mb-2 text-xs text-white/60">
-            {new Date(data.timestamp).toLocaleString()}
-          </p>
-          <p className="text-lg font-bold text-white">
-            {data.price.toFixed(6)} SOL
-          </p>
-          <p className="text-sm text-white/60">Volume: {data.volume.toFixed(2)}</p>
-        </div>
-      );
-    }
-    return null;
-  };
+  const volumeData = useMemo(
+    () =>
+      candles.map((candle) => ({
+        time: Math.floor(new Date(candle.timestamp).getTime() / 1000) as UTCTimestamp,
+        value: candle.volume,
+        color: candle.close >= candle.open ? "rgba(34,197,94,0.35)" : "rgba(248,113,113,0.35)",
+      })),
+    [candles]
+  );
+
+  useEffect(() => {
+    if (!chartRef.current || chartData.length === 0) return;
+
+    const chart = createChart(chartRef.current, {
+      height: 360,
+      layout: {
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: "rgba(255,255,255,0.62)",
+      },
+      grid: {
+        vertLines: { color: "rgba(255,255,255,0.06)" },
+        horzLines: { color: "rgba(255,255,255,0.06)" },
+      },
+      rightPriceScale: {
+        borderColor: "rgba(255,255,255,0.12)",
+      },
+      timeScale: {
+        borderColor: "rgba(255,255,255,0.12)",
+        timeVisible: true,
+      },
+      crosshair: {
+        horzLine: { color: "rgba(255,255,255,0.2)" },
+        vertLine: { color: "rgba(255,255,255,0.2)" },
+      },
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: "#22c55e",
+      downColor: "#f87171",
+      borderVisible: false,
+      wickUpColor: "#22c55e",
+      wickDownColor: "#f87171",
+    });
+    candleSeries.setData(chartData);
+
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "",
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.8,
+        bottom: 0,
+      },
+    });
+    volumeSeries.setData(volumeData);
+
+    chart.timeScale().fitContent();
+
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      chart.applyOptions({ width: entry.contentRect.width });
+    });
+    resizeObserver.observe(chartRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      chart.remove();
+    };
+  }, [chartData, volumeData]);
 
   return (
     <div className={cn("rounded-3xl border border-white/10 bg-black/60 p-6 backdrop-blur-xl", className)}>
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-bold text-white">{tokenSymbol} Price</h3>
@@ -129,9 +180,8 @@ export default function PriceChart({
           </div>
         </div>
 
-        {/* Timeframe Selector */}
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-1">
-          {(["1H", "24H", "7D", "ALL"] as const).map((tf) => (
+          {TIMEFRAMES.map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
@@ -148,98 +198,33 @@ export default function PriceChart({
         </div>
       </div>
 
-      {/* Chart */}
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <Activity className="h-8 w-8 animate-pulse text-white/40" />
-            <p className="text-sm text-white/60">Loading chart data...</p>
-          </div>
-        </div>
-      ) : priceData.length === 0 ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <Activity className="h-8 w-8 text-white/40" />
-            <p className="text-sm text-white/60">No price data available yet</p>
-            <p className="text-xs text-white/40">Data will appear after the first trade</p>
-          </div>
-        </div>
+        <EmptyChart label="Loading chart data..." pulse />
+      ) : chartData.length === 0 ? (
+        <EmptyChart label="No indexed candles yet" detail="Candles will appear after RedCircle trades are confirmed." />
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={priceData}>
-              <defs>
-                <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor={isPositive ? "#10b981" : "#ef4444"}
-                    stopOpacity={0.3}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor={isPositive ? "#10b981" : "#ef4444"}
-                    stopOpacity={0}
-                  />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis
-                dataKey="timestamp"
-                tickFormatter={formatXAxis}
-                stroke="rgba(255,255,255,0.4)"
-                style={{ fontSize: "12px" }}
-              />
-              <YAxis
-                domain={["auto", "auto"]}
-                tickFormatter={(value) => value.toFixed(4)}
-                stroke="rgba(255,255,255,0.4)"
-                style={{ fontSize: "12px" }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="price"
-                stroke={isPositive ? "#10b981" : "#ef4444"}
-                strokeWidth={2}
-                fill="url(#priceGradient)"
-                animationDuration={1000}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-
-          {/* Volume Chart */}
-          <div className="mt-6">
-            <h4 className="mb-3 text-sm font-semibold text-white/70">Volume</h4>
-            <ResponsiveContainer width="100%" height={100}>
-              <AreaChart data={priceData}>
-                <defs>
-                  <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="timestamp" hide />
-                <YAxis hide />
-                <Tooltip content={<CustomTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="volume"
-                  stroke="#8b5cf6"
-                  strokeWidth={1}
-                  fill="url(#volumeGradient)"
-                  animationDuration={1000}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+        <div ref={chartRef} className="h-[360px] w-full" />
       )}
     </div>
   );
 }
 
-
+function EmptyChart({
+  label,
+  detail,
+  pulse = false,
+}: {
+  label: string;
+  detail?: string;
+  pulse?: boolean;
+}) {
+  return (
+    <div className="flex h-80 items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <Activity className={cn("h-8 w-8 text-white/40", pulse && "animate-pulse")} />
+        <p className="text-sm text-white/60">{label}</p>
+        {detail && <p className="text-xs text-white/40">{detail}</p>}
+      </div>
+    </div>
+  );
+}

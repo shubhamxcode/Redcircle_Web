@@ -1,5 +1,10 @@
 import { Router } from "express";
-import { buyTokens, sellTokens, getTradingStats } from "../services/trading.service";
+import { buyTokens, sellTokens, getTradingStats, quoteTrade } from "../services/trading.service";
+import {
+  getRedCircleCandles,
+  getRedCircleTrades,
+  recordConfirmedRedCircleTrade,
+} from "../services/redcircle-indexer.service";
 import { authenticateToken } from "../middleware/auth";
 import { db } from "../db";
 import * as schema from "../db";
@@ -11,13 +16,13 @@ const router = Router();
 
 /**
  * POST /api/trading/buy
- * Buy tokens from a post's DBC pool
+ * Buy tokens from a post's RedCircle pool
  * Body: { postId, amountInSOL, walletAddress }
  * - amountInSOL: Amount of SOL to spend (not token amount)
  */
 router.post("/buy", authenticateToken, async (req, res) => {
   try {
-    const { postId, amountInSOL, walletAddress } = req.body;
+    const { postId, amountInSOL, walletAddress, slippageBps } = req.body;
 
     // Validation
     if (!postId || !amountInSOL || !walletAddress) {
@@ -38,10 +43,10 @@ router.post("/buy", authenticateToken, async (req, res) => {
       postId,
       buyerWalletAddress: walletAddress,
       amountInSOL: parseFloat(amountInSOL),
+      slippageBps: slippageBps == null ? undefined : Number(slippageBps),
     });
 
     res.json({
-      success: true,
       message: "Transaction prepared. Please sign with your wallet.",
       ...result,
     });
@@ -60,7 +65,7 @@ router.post("/buy", authenticateToken, async (req, res) => {
  */
 router.post("/sell", authenticateToken, async (req, res) => {
   try {
-    const { postId, amount, walletAddress } = req.body;
+    const { postId, amount, walletAddress, slippageBps } = req.body;
 
     // Validation
     if (!postId || !amount || !walletAddress) {
@@ -80,11 +85,11 @@ router.post("/sell", authenticateToken, async (req, res) => {
     const result = await sellTokens({
       postId,
       sellerWalletAddress: walletAddress,
-      amount: parseInt(amount),
+      amountInTokens: parseFloat(amount),
+      slippageBps: slippageBps == null ? undefined : Number(slippageBps),
     });
 
     res.json({
-      success: true,
       message: "Transaction prepared. Please sign with your wallet.",
       ...result,
     });
@@ -92,6 +97,37 @@ router.post("/sell", authenticateToken, async (req, res) => {
     console.error("❌ Sell tokens error:", error);
     res.status(500).json({
       error: "Failed to prepare sell transaction",
+      details: error.message,
+    });
+  }
+});
+
+router.post("/quote", async (req, res) => {
+  try {
+    const { postId, side, amount, slippageBps } = req.body;
+
+    if (!postId || !side || !amount) {
+      return res.status(400).json({
+        error: "Missing required fields: postId, side, amount",
+      });
+    }
+
+    if (side !== "buy" && side !== "sell") {
+      return res.status(400).json({ error: "side must be buy or sell" });
+    }
+
+    const quote = await quoteTrade({
+      postId,
+      side,
+      amount: parseFloat(amount),
+      slippageBps: slippageBps == null ? undefined : Number(slippageBps),
+    });
+
+    res.json({ success: true, quote });
+  } catch (error: any) {
+    console.error("❌ Quote trade error:", error);
+    res.status(500).json({
+      error: "Failed to quote trade",
       details: error.message,
     });
   }
@@ -120,13 +156,48 @@ router.get("/stats/:postId", async (req, res) => {
   }
 });
 
+router.get("/candles/:postId", async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const timeframe = (req.query.timeframe as string) || "5m";
+    const sinceMs = req.query.since ? Number(req.query.since) : null;
+    const candles = await getRedCircleCandles({
+      postId,
+      timeframe,
+      since: sinceMs ? new Date(sinceMs) : undefined,
+    });
+
+    res.json({ success: true, timeframe, candles });
+  } catch (error: any) {
+    console.error("❌ Get candles error:", error);
+    res.status(500).json({
+      error: "Failed to get candles",
+      details: error.message,
+    });
+  }
+});
+
+router.get("/trades/:postId", async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const trades = await getRedCircleTrades(postId);
+    res.json({ success: true, trades });
+  } catch (error: any) {
+    console.error("❌ Get trades error:", error);
+    res.status(500).json({
+      error: "Failed to get trades",
+      details: error.message,
+    });
+  }
+});
+
 /**
  * POST /api/trading/confirm
  * Confirm transaction and update holdings + record transaction history
  */
 router.post("/confirm", authenticateToken, async (req, res) => {
   try {
-    const { signature, postId, type, amount, price, walletAddress } = req.body;
+    const { signature, postId, type, amount, price, walletAddress, quote } = req.body;
     const userId = (req as any).userId;
 
     console.log(`\n✅ Transaction confirmed: ${signature}`);
@@ -143,6 +214,26 @@ router.post("/confirm", authenticateToken, async (req, res) => {
 
     if (!post || !post.tokenMintAddress) {
       throw new Error("Post or token mint not found");
+    }
+
+    if (quote && (type === "buy" || type === "sell")) {
+      const summary = await recordConfirmedRedCircleTrade({
+        signature,
+        postId,
+        protocolPostId: post.redCirclePostId || post.redditPostId,
+        side: type,
+        quote,
+      });
+
+      await db
+        .update(schema.posts)
+        .set({
+          currentPrice: summary.currentPrice.toString(),
+          totalVolume: summary.totalVolume.toString(),
+          marketCap: (summary.currentPrice * summary.tokenSupply).toString(),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.posts.id, postId));
     }
 
     // Calculate price per token
@@ -265,4 +356,3 @@ router.post("/confirm", authenticateToken, async (req, res) => {
 });
 
 export default router;
-

@@ -29,4 +29,5 @@ export * from "./schema/posts";
 export * from "./schema/holdings";
 export * from "./schema/transactions";
 export * from "./schema/price-history";
+export * from "./schema/redcircle-indexer";
 export * from "./schema/waitlist";

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "users", "label": "users.ts", "file_type": "code", "source_file": "apps/server/src/db/schema/users.ts", "source_location": "L1"}], "edges": [{"source": "users", "target": "pg_core", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "apps/server/src/db/schema/users.ts", "source_location": "L1", "weight": 1.0}]}

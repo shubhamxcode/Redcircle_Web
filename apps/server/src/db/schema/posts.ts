@@ -37,8 +37,12 @@ export const posts = pgTable("posts", {
   tokenMintAddress: text("token_mint_address").unique(), // Solana token mint address
   tokenSymbol: text("token_symbol"), // e.g., "POST123"
   tokenDecimals: integer("token_decimals").default(9), // Standard SPL token decimals
-  dbcPoolAddress: text("dbc_pool_address").unique(), // Meteora DBC pool address
-  dbcConfigAddress: text("dbc_config_address"), // Meteora DBC config address
+  redCirclePostId: text("redcircle_post_id").unique(),
+  redCirclePoolAddress: text("redcircle_pool_address").unique(),
+  redCircleMarketStateAddress: text("redcircle_market_state_address").unique(),
+  redCirclePoolSolVaultAddress: text("redcircle_pool_sol_vault_address").unique(),
+  redCirclePoolTokenVaultAddress: text("redcircle_pool_token_vault_address").unique(),
+  redCircleConfigAddress: text("redcircle_config_address"),
   
   // Tokenization Status
   status: tokenizationStatusEnum("status").default("pending").notNull(),
@@ -64,4 +68,3 @@ export const posts = pgTable("posts", {
 
 export type Post = typeof posts.$inferSelect;
 export type NewPost = typeof posts.$inferInsert;
-

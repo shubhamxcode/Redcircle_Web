@@ -23,6 +23,13 @@ type BackendPost = {
   marketCap?: string;
   totalVolume?: string; // Database field name
   featured: number;
+  tokenSymbol?: string;
+  initialPrice?: string;
+  status?: string;
+  tokenMintAddress?: string;
+  redditUrl?: string;
+  tokenSupply?: number | string;
+  holders?: number;
 };
 
 export default function RedditFeed({ sideFilters = false }: { sideFilters?: boolean }) {
@@ -106,7 +113,7 @@ export default function RedditFeed({ sideFilters = false }: { sideFilters?: bool
           status: post.status,
           tokenMintAddress: post.tokenMintAddress,
           redditUrl: post.redditUrl,
-          totalSupply: post.tokenSupply ? parseFloat(post.tokenSupply) : undefined,
+          totalSupply: post.tokenSupply ? Number(post.tokenSupply) : undefined,
           holders: post.holders || 0,
         }));
         

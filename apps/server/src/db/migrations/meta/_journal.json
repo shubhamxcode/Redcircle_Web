@@ -36,6 +36,13 @@
       "when": 1764411018779,
       "tag": "0004_curly_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778409600000,
+      "tag": "0005_redcircle_protocol",
+      "breakpoints": true
     }
   ]
 }

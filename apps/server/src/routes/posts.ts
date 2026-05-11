@@ -190,15 +190,15 @@ router.post("/tokenize", async (req, res) => {
         postId: redditPost.id,
         tokenSymbol,
         tokenSupply: parseInt(tokenSupply.toString()),
-        decimals: 9, // Standard SPL token decimals
+        decimals: 6,
+        initialPriceSol: parseFloat(initialPrice.toString()),
+        tokenName: `RedCircle ${tokenSymbol}`,
       });
       
       console.log("✅ Token successfully minted on blockchain!");
       console.log(`   Mint Address: ${tokenMintData.mintAddress}`);
       console.log(`   Explorer: ${tokenMintData.explorerUrl}`);
-      if (tokenMintData.dbcPoolAddress) {
-        console.log(`   DBC Pool: ${tokenMintData.dbcPoolAddress}`);
-      }
+      console.log(`   RedCircle Pool: ${tokenMintData.redCirclePoolAddress}`);
     } catch (mintError) {
       console.error("❌ Failed to mint token on blockchain:", mintError);
       
@@ -229,9 +229,13 @@ router.post("/tokenize", async (req, res) => {
         description: description || null,
         tokenSymbol,
         tokenDecimals: tokenMintData.decimals,
-        tokenMintAddress: tokenMintData.mintAddress, // ← Blockchain address
-        dbcPoolAddress: tokenMintData.dbcPoolAddress || null, // ← DBC pool address
-        dbcConfigAddress: tokenMintData.dbcConfigAddress || null, // ← DBC config address
+        tokenMintAddress: tokenMintData.mintAddress,
+        redCirclePostId: redditPost.id,
+        redCirclePoolAddress: tokenMintData.redCirclePoolAddress,
+        redCircleMarketStateAddress: tokenMintData.redCircleMarketStateAddress,
+        redCirclePoolSolVaultAddress: tokenMintData.redCirclePoolSolVaultAddress,
+        redCirclePoolTokenVaultAddress: tokenMintData.redCirclePoolTokenVaultAddress,
+        redCircleConfigAddress: tokenMintData.redCircleConfigAddress,
         status: "active", // ← Token is minted and active!
         totalVolume: "0",
         marketCap,
@@ -554,4 +558,3 @@ router.get("/:id", async (req, res) => {
 });
 
 export default router;
-
