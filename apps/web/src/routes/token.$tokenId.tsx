@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+=======
+import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useState } from "react";
+>>>>>>> 4704f85 (added a script for quick spinup, and several UI improvements)
 import { fetchWithAuth } from "@/lib/auth";
 import { motion } from "motion/react";
 import { ArrowLeft, ExternalLink, TrendingUp, Users, Activity, DollarSign } from "lucide-react";
@@ -14,18 +19,72 @@ export const Route = createFileRoute("/token/$tokenId")({
   component: TokenDetailsPage,
 });
 
+type BackendPost = {
+  id: string;
+  title: string;
+  subreddit: string;
+  author: string;
+  upvotes?: number;
+  comments?: number;
+  tokenizedAt?: string;
+  createdAt?: string;
+  thumbnail?: string | null;
+  currentPrice?: string | number | null;
+  marketCap?: string | number | null;
+  totalVolume?: string | number | null;
+  tokenSymbol?: string;
+  initialPrice?: string;
+  status?: string;
+  tokenMintAddress?: string | null;
+  redditUrl?: string | null;
+  tokenSupply?: string | number | null;
+  holders?: number | null;
+};
+
+function toNumber(value: string | number | null | undefined) {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function normalizePost(post: BackendPost): FeedPost {
+  return {
+    id: post.id,
+    title: post.title,
+    subreddit: post.subreddit,
+    author: post.author,
+    upvotes: post.upvotes || 0,
+    comments: post.comments || 0,
+    createdAt: post.tokenizedAt || post.createdAt || new Date().toISOString(),
+    imageUrl: post.thumbnail || undefined,
+    tokenPrice: toNumber(post.currentPrice),
+    marketCap: toNumber(post.marketCap),
+    volume24h: toNumber(post.totalVolume),
+    tokenSymbol: post.tokenSymbol,
+    initialPrice: post.initialPrice,
+    status: post.status,
+    tokenMintAddress: post.tokenMintAddress || undefined,
+    redditUrl: post.redditUrl || undefined,
+    totalSupply: toNumber(post.tokenSupply),
+    holders: post.holders || 0,
+  };
+}
+
 function TokenDetailsPage() {
   const { tokenId } = Route.useParams();
   const navigate = Route.useNavigate();
   const [post, setPost] = useState<FeedPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showTradingModal, setShowTradingModal] = useState(false);
+  const [chartRefreshKey, setChartRefreshKey] = useState(0);
 
-  useEffect(() => {
-    const fetchTokenDetails = async () => {
+  const fetchTokenDetails = useCallback(
+    async (showLoading = true) => {
       try {
-        setLoading(true);
+        if (showLoading) setLoading(true);
         setError(null);
 
         const response = await fetchWithAuth(`/api/posts/${tokenId}`);
@@ -35,17 +94,25 @@ function TokenDetailsPage() {
           throw new Error(data.error || "Failed to fetch token details");
         }
 
-        setPost(data.post);
+        setPost(normalizePost(data.post));
       } catch (err) {
         console.error("❌ Error fetching token details:", err);
         setError(err instanceof Error ? err.message : "Failed to load token");
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
-    };
+    },
+    [tokenId],
+  );
 
-    fetchTokenDetails();
-  }, [tokenId]);
+  useEffect(() => {
+    void fetchTokenDetails(true);
+  }, [fetchTokenDetails]);
+
+  const handleTradeComplete = () => {
+    setChartRefreshKey((key) => key + 1);
+    void fetchTokenDetails(false);
+  };
 
   if (loading) {
     return (
@@ -94,7 +161,7 @@ function TokenDetailsPage() {
           Back
         </Button>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[390px_minmax(0,1fr)]">
           {/* Left Column - Token Info */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -137,13 +204,6 @@ function TokenDetailsPage() {
                   </div>
                 </div>
 
-                <Button
-                  onClick={() => setShowTradingModal(true)}
-                  className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 py-6 text-lg font-semibold hover:from-purple-700 hover:to-blue-700"
-                >
-                  Trade Now
-                </Button>
-
                 {post.tokenMintAddress && (
                   <a
                     href={`https://solscan.io/token/${post.tokenMintAddress}?cluster=devnet`}
@@ -157,6 +217,12 @@ function TokenDetailsPage() {
                 )}
               </div>
             </div>
+
+            <TradingModal
+              post={post}
+              isOpen={true}
+              onClose={handleTradeComplete}
+            />
 
             {/* Stats Card */}
             <div className="rounded-3xl border border-white/10 bg-black/60 p-6 backdrop-blur-xl">
@@ -236,28 +302,18 @@ function TokenDetailsPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="lg:col-span-2"
+            className="min-w-0"
           >
             <PriceChart
               postId={post.id}
               currentPrice={post.tokenPrice || 0}
               initialPrice={parseFloat(post.initialPrice || "0.001")}
               tokenSymbol={post.tokenSymbol}
+              refreshKey={chartRefreshKey}
             />
           </motion.div>
         </div>
       </div>
-
-      {/* Trading Modal */}
-      {showTradingModal && (
-        <TradingModal
-          post={post}
-          isOpen={showTradingModal}
-          onClose={() => setShowTradingModal(false)}
-        />
-      )}
     </div>
   );
 }
-
-

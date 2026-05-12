@@ -1,7 +1,12 @@
 import {
+  ComputeBudgetProgram,
   Connection,
   Keypair,
   PublicKey,
+  Transaction,
+  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
 import bs58 from "bs58";
@@ -84,6 +89,8 @@ export type RedCirclePoolSummary = {
   totalVolume: number;
   totalFees: number;
   totalTrades: number;
+  launchProtectionEndsAt: number;
+  maxBuyDuringProtection: number;
   fees: {
     creator: number;
     curator: number;
@@ -115,6 +122,18 @@ export type CreateRedCirclePoolResult = {
   decimals: number;
   explorerUrl: string;
   initialPrice: number;
+};
+
+type BuiltRedCircleTransaction = {
+  transaction: VersionedTransaction;
+  blockhash: string;
+  lastValidBlockHeight: number;
+};
+
+type BuiltLegacyRedCircleTransaction = {
+  transaction: Transaction;
+  blockhash: string;
+  lastValidBlockHeight: number;
 };
 
 function getRpcUrl() {
@@ -166,6 +185,65 @@ export function getRedCircleClient(connection = getRedCircleConnection()) {
   return new RedCircleClient(getReadOnlyProvider(connection) as never, {
     programId: getRedCircleProgramId(),
   });
+}
+
+async function buildVersionedTransaction(
+  connection: Connection,
+  payer: PublicKey,
+  instructions: TransactionInstruction[],
+  opts: { computeUnitLimit?: number } = {}
+): Promise<BuiltRedCircleTransaction> {
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  const finalInstructions = [...instructions];
+
+  if (opts.computeUnitLimit != null) {
+    finalInstructions.unshift(
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: opts.computeUnitLimit,
+      })
+    );
+  }
+
+  const message = new TransactionMessage({
+    payerKey: payer,
+    recentBlockhash: blockhash,
+    instructions: finalInstructions,
+  }).compileToV0Message();
+
+  return {
+    transaction: new VersionedTransaction(message),
+    blockhash,
+    lastValidBlockHeight,
+  };
+}
+
+async function buildLegacyTransaction(
+  connection: Connection,
+  payer: PublicKey,
+  instructions: TransactionInstruction[],
+  opts: { computeUnitLimit?: number } = {}
+): Promise<BuiltLegacyRedCircleTransaction> {
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  const transaction = new Transaction({
+    feePayer: payer,
+    recentBlockhash: blockhash,
+  });
+
+  if (opts.computeUnitLimit != null) {
+    transaction.add(
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: opts.computeUnitLimit,
+      })
+    );
+  }
+
+  transaction.add(...instructions);
+
+  return {
+    transaction,
+    blockhash,
+    lastValidBlockHeight,
+  };
 }
 
 function solToLamports(sol: number): BN {
@@ -240,21 +318,21 @@ export async function createRedCirclePool(
     sigmoidSteepnessBps: new BN(10_000),
   });
 
-  const tx = await client.buildTransaction(authority.publicKey, [ix], {
+  const builtTx = await buildVersionedTransaction(connection, authority.publicKey, [ix], {
     computeUnitLimit: COMPUTE_UNIT_LIMIT,
   });
+  const tx = builtTx.transaction;
   tx.sign([authority]);
 
   const signature = await (connection as any).sendTransaction(tx, {
     skipPreflight: false,
     preflightCommitment: "confirmed",
   });
-  const latestBlockhash = await connection.getLatestBlockhash();
   await connection.confirmTransaction(
     {
       signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      blockhash: builtTx.blockhash,
+      lastValidBlockHeight: builtTx.lastValidBlockHeight,
     },
     "confirmed"
   );
@@ -278,9 +356,10 @@ export async function createRedCirclePool(
 export async function getRedCirclePoolSummary(protocolPostId: string): Promise<RedCirclePoolSummary> {
   const client = getRedCircleClient();
   const addrs = client.derivePoolAddresses(protocolPostId);
-  const [pool, market] = await Promise.all([
+  const [pool, market, config] = await Promise.all([
     client.fetchPool(protocolPostId),
     client.fetchMarketState(protocolPostId),
+    client.fetchConfig(),
   ]);
   const model = parsePoolModel(pool.model);
   const status = parsePoolStatus(pool.status);
@@ -309,6 +388,8 @@ export async function getRedCirclePoolSummary(protocolPostId: string): Promise<R
     totalVolume: lamportsToSol(pool.totalVolume),
     totalFees: lamportsToSol(pool.totalFees),
     totalTrades: Number(market.totalTrades.toString()),
+    launchProtectionEndsAt: Number(pool.launchProtectionEndsAt.toString()),
+    maxBuyDuringProtection: lamportsToSol(config.maxBuyDuringProtection),
     fees: {
       creator: lamportsToSol(new BN(market.creatorFeesEarned.toString())),
       curator: lamportsToSol(new BN(market.curatorFeesEarned.toString())),
@@ -334,8 +415,26 @@ export async function quoteRedCircleTrade(
     client.fetchMarketState(protocolPostId),
   ]);
   const model = parsePoolModel(pool.model);
+  const status = parsePoolStatus(pool.status);
   const isBuy = side === "buy";
   const amountInRaw = isBuy ? solToLamports(amount) : tokensToRaw(amount);
+
+  if (isBuy && status === "launchProtection") {
+    const now = Math.floor(Date.now() / 1000);
+    const launchProtectionEndsAt = Number(pool.launchProtectionEndsAt.toString());
+
+    if (now < launchProtectionEndsAt) {
+      const config = await client.fetchConfig();
+      if (amountInRaw.gt(config.maxBuyDuringProtection)) {
+        throw new Error(
+          `Launch protection is active. Maximum buy is ${lamportsToSol(
+            config.maxBuyDuringProtection
+          )} SOL until ${new Date(launchProtectionEndsAt * 1000).toISOString()}.`
+        );
+      }
+    }
+  }
+
   let price: BN;
   let activeBin: PublicKey | null = null;
   let amountOutRaw: BN;
@@ -382,6 +481,8 @@ export async function buildRedCircleTradeTransaction(params: {
   slippageBps?: number;
 }): Promise<{
   transaction: string;
+  blockhash: string;
+  lastValidBlockHeight: number;
   quote: RedCircleQuote;
   pool: string;
   tokenMint: string;
@@ -424,12 +525,19 @@ export async function buildRedCircleTradeTransaction(params: {
           }
         );
 
-  const tx = await client.buildTransaction(params.user, [ix], {
+  const builtTx = await buildLegacyTransaction(connection, params.user, [ix], {
     computeUnitLimit: COMPUTE_UNIT_LIMIT,
   });
 
   return {
-    transaction: Buffer.from(tx.serialize()).toString("base64"),
+    transaction: builtTx.transaction
+      .serialize({
+        requireAllSignatures: false,
+        verifySignatures: false,
+      })
+      .toString("base64"),
+    blockhash: builtTx.blockhash,
+    lastValidBlockHeight: builtTx.lastValidBlockHeight,
     quote,
     pool: client.derivePoolAddresses(params.protocolPostId).pool.toBase58(),
     tokenMint: client.derivePoolAddresses(params.protocolPostId).tokenMint.toBase58(),

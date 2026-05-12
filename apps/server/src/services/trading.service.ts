@@ -167,6 +167,8 @@ export async function getTradingStats(postId: string) {
     tokenReserve: summary.tokenReserve,
     totalFees: summary.totalFees,
     totalTrades: summary.totalTrades,
+    launchProtectionEndsAt: summary.launchProtectionEndsAt,
+    maxBuyDuringProtection: summary.maxBuyDuringProtection,
     fees: summary.fees,
   };
 }

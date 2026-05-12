@@ -27,6 +27,7 @@ interface PriceChartProps {
   initialPrice: number;
   tokenSymbol?: string;
   className?: string;
+  refreshKey?: number;
 }
 
 const TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "1h", "1d"];
@@ -37,6 +38,7 @@ export default function PriceChart({
   initialPrice,
   tokenSymbol = "TOKEN",
   className,
+  refreshKey = 0,
 }: PriceChartProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -67,7 +69,7 @@ export default function PriceChart({
     };
 
     void fetchCandles();
-  }, [postId, timeframe]);
+  }, [postId, timeframe, refreshKey]);
 
   const chartData = useMemo(
     () =>
