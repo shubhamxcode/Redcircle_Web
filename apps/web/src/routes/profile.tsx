@@ -1,8 +1,9 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
 import ProfilePanel from "@/components/ProfilePanel";
 
 export const Route = createFileRoute("/profile")({
+  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: ProfilePage,
 });
 

@@ -130,7 +130,7 @@ export function AnimatedFooter() {
           >
             <h3 className="text-xs uppercase tracking-wider text-neutral-500 mb-4 font-satoshi">Follow</h3>
             <div className="flex items-center gap-5 text-neutral-400">
-              <a className="hover:text-white transition-colors" href="https://twitter.com/adityaslyf" target="_blank" rel="noreferrer" aria-label="Twitter"><TwitterIcon className="w-5 h-5" /></a>
+              <a className="hover:text-white transition-colors" href="https://x.com/redcircle_sol" target="_blank" rel="noreferrer" aria-label="X / Twitter"><TwitterIcon className="w-5 h-5" /></a>
               <a className="hover:text-white transition-colors" href="https://github.com/adityaslyf" target="_blank" rel="noreferrer" aria-label="GitHub"><GithubIcon className="w-5 h-5" /></a>
               <a className="hover:text-white transition-colors" href="https://www.linkedin.com/in/aditya-varshney-089b33244/" target="_blank" rel="noreferrer" aria-label="LinkedIn"><LinkedinIcon className="w-5 h-5" /></a>
             </div>

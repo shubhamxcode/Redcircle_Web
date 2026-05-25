@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth";
 import { motion } from "motion/react";
@@ -10,6 +10,7 @@ import type { FeedPost } from "@/components/FeedCard";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/token/$tokenId")({
+  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: TokenDetailsPage,
 });
 

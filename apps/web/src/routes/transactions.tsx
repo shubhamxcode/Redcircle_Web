@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchWithAuth, getApiUrl } from "@/lib/auth";
@@ -39,6 +39,7 @@ interface TransactionStats {
 }
 
 export const Route = createFileRoute("/transactions")({
+  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: TransactionsPage,
 });
 

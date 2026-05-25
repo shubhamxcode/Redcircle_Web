@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
 import LaunchPanel from "@/components/LaunchPanel";
 
@@ -9,6 +9,7 @@ const RedditIcon = () => (
 );
 
 export const Route = createFileRoute("/launch")({
+  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: LaunchPage,
 });
 

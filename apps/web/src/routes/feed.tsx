@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import RedditFeed from "@/components/RedditFeed";
 
 export const Route = createFileRoute("/feed")({
+  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: FeedPage,
 });
 
