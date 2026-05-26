@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import { RefreshCw } from "lucide-react";
 import FeedCard, { type FeedPost } from "@/components/FeedCard";
-import TradingModal from "@/components/TradingModal";
 import SearchBar, { type SearchFilters } from "@/components/SearchBar";
 import { getApiUrl } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "@tanstack/react-router";
 
 // Backend post type (matches database schema)
 type BackendPost = {
@@ -33,11 +33,10 @@ type BackendPost = {
 };
 
 export default function RedditFeed({ sideFilters = false }: { sideFilters?: boolean }) {
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPost, setSelectedPost] = useState<FeedPost | null>(null);
-  const [isTradingModalOpen, setIsTradingModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -202,8 +201,7 @@ export default function RedditFeed({ sideFilters = false }: { sideFilters?: bool
   const filtered = posts;
 
   const handleTrade = (post: FeedPost) => {
-    setSelectedPost(post);
-    setIsTradingModalOpen(true);
+    void navigate({ to: "/token/$tokenId", params: { tokenId: post.id } });
   };
 
   return (
@@ -327,17 +325,6 @@ export default function RedditFeed({ sideFilters = false }: { sideFilters?: bool
         )}
       </section>
 
-      {/* Trading Modal */}
-      {selectedPost && (
-        <TradingModal
-          post={selectedPost}
-          isOpen={isTradingModalOpen}
-          onClose={() => {
-            setIsTradingModalOpen(false);
-            setSelectedPost(null);
-          }}
-        />
-      )}
     </>
   );
 }

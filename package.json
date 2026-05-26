@@ -12,7 +12,6 @@
     "dev:native": "pnpm --filter native dev",
     "dev:web": "pnpm --filter web dev",
     "dev:server": "pnpm --filter server dev",
-    "setup:localnet": "node scripts/setup-localnet.mjs",
     "db:push": "pnpm --filter server db:push",
     "db:generate": "pnpm --filter server db:generate"
   },
