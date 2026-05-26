@@ -73,11 +73,11 @@ export default function ProfilePanel() {
       <div className="relative mb-4 sm:mb-6 overflow-hidden rounded-2xl sm:rounded-3xl border border-white/15 bg-gradient-to-br from-white/[0.04] to-white/[0.02] p-4 sm:p-6 backdrop-blur">
         <div className="flex items-center gap-2 sm:gap-4">
           <div className="h-12 w-12 sm:h-16 sm:w-16 overflow-hidden rounded-xl sm:rounded-2xl border border-white/15 bg-white/10">
-            {display.avatarUrl ? (
-              <img src={display.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
-            ) : (
-              <div className="grid h-full w-full place-items-center text-white/60 text-xs sm:text-base">u/</div>
-            )}
+            <img
+              src={display.avatarUrl || "/logo.png"}
+              alt="avatar"
+              className="h-full w-full object-cover"
+            />
           </div>
           <div className="min-w-0">
             <motion.h2

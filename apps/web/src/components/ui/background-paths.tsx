@@ -250,8 +250,8 @@ export function BackgroundPaths({
 						className="relative group"
 					>
 						<div className="absolute inset-0 bg-orange-500/30 blur-xl rounded-full group-hover:bg-orange-500/50 transition-all duration-500" />
-						<div className="w-20 h-20 md:w-32 md:h-32 bg-white/80 dark:bg-black/80 backdrop-blur-xl rounded-3xl shadow-2xl p-5 border border-white/20 dark:border-white/10 z-10 relative flex items-center justify-center">
-							<RedditIcon />
+						<div className="w-20 h-20 md:w-32 md:h-32 dark:bg-black/80 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-white/10 z-10 relative">
+							<img src="/logo.png" alt="Redcircle" className="w-full h-full object-cover" />
 						</div>
 						<motion.div
 							animate={{ rotate: 360 }}

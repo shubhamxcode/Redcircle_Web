@@ -9,17 +9,11 @@ export default function UserProfile() {
     <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
       {/* User Avatar */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        {user.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt={user.username}
-            className="w-8 h-8 rounded-full border-2 border-white/20 flex-shrink-0"
-          />
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-            {user.username?.charAt(0).toUpperCase()}
-          </div>
-        )}
+        <img
+          src={user.avatarUrl || "/logo.png"}
+          alt={user.username}
+          className="w-8 h-8 rounded-full border-2 border-white/20 flex-shrink-0 object-cover"
+        />
         <span className="text-white text-sm font-medium truncate">
           {user.username}
         </span>

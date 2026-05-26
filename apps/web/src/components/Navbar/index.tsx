@@ -10,6 +10,7 @@ export default function Navbar() {
 						to="/home"
 						className="flex shrink-0 items-center gap-2 z-50 font-extrabold text-lg sm:text-xl tracking-tight text-white"
 					>
+						<img src="/logo.png" alt="Redcircle" className="h-8 w-auto" />
 						<span>Redcircle</span>
 					</Link>
 				</div>
