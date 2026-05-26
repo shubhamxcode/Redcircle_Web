@@ -3,7 +3,6 @@ import cors from "cors";
 import express from "express";
 import redditAuthRoutes from "./config/reddit-oauth-simple";
 import postsRoutes from "./routes/posts";
-import tradingRoutes from "./routes/trading";
 import portfolioRoutes from "./routes/portfolio";
 import transactionsRoutes from "./routes/transactions";
 import leaderboardRoutes from "./routes/leaderboard";
@@ -28,7 +27,6 @@ app.use(
 // Routes
 app.use(redditAuthRoutes);
 app.use("/api/posts", postsRoutes);
-app.use("/api/trading", tradingRoutes);
 app.use("/api/portfolio", portfolioRoutes);
 app.use("/api/transactions", transactionsRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
