@@ -136,9 +136,11 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       },
       name:        body.tokenName,
       symbol:      body.tokenSymbol.toUpperCase(),
-      description: body.description ?? body.redditTitle,
+      description: body.description?.trim() || body.redditTitle,
       imageUrl:    body.imageUrl ?? body.redditThumbnail ?? "https://www.redcircle.lol/logo.png",
     };
+
+    console.log("🚀 [Launch/prepare] Orynth payload:", JSON.stringify(orynthPayload, null, 2));
 
     const prepared = await Orynth.prepareLaunch(orynthPayload);
 
