@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { Transaction } from "@solana/web3.js";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { TrendingUp, Coins, Users, Sparkles, AlertCircle, ArrowRight, Rocket, CheckCircle, Loader2, ExternalLink } from "lucide-react";
@@ -47,7 +47,6 @@ const STEP_LABELS: Record<LaunchStep, string> = {
 export default function LaunchPanel() {
   const { user } = useAuth();
   const { publicKey, signTransaction, connected } = useWallet();
-  const { connection } = useConnection();
 
   const [url, setUrl] = useState("");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
@@ -173,9 +172,6 @@ export default function LaunchPanel() {
       const txBuffer = Buffer.from(partiallySignedTxHex, "hex");
       const tx = Transaction.from(txBuffer);
 
-      // Get fresh blockhash if needed
-      const { blockhash } = await connection.getLatestBlockhash();
-      if (!tx.recentBlockhash) tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
 
       const signedTx = await signTransaction(tx);
