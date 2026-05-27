@@ -4,9 +4,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useNavigate } from "@tanstack/react-router";
 import { Transaction } from "@solana/web3.js";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { TrendingUp, Coins, Users, Sparkles, AlertCircle, ArrowRight, Rocket, CheckCircle, Loader2, ExternalLink } from "lucide-react";
+import { TrendingUp, Coins, Users, AlertCircle, ArrowRight, Rocket, CheckCircle, Loader2, ExternalLink } from "lucide-react";
 import { fetchWithAuth, getApiUrl } from "@/lib/auth";
 
 interface RedditPostPreview {
@@ -47,6 +48,7 @@ const STEP_LABELS: Record<LaunchStep, string> = {
 export default function LaunchPanel() {
   const { user } = useAuth();
   const { publicKey, signTransaction, connected } = useWallet();
+  const navigate = useNavigate();
 
   const [url, setUrl] = useState("");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
@@ -136,7 +138,7 @@ export default function LaunchPanel() {
       return;
     }
     if (!user?.id) {
-      setError("Sign in with Reddit first");
+      navigate({ to: "/signin", search: { redirect: "/launch" } });
       return;
     }
 
@@ -212,23 +214,7 @@ export default function LaunchPanel() {
   const isBusy = ["fetching", "quoting", "preparing", "signing", "submitting", "polling"].includes(step);
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6">
-      {/* Hero */}
-      <div className="text-center mb-12">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-white/60 text-xs font-medium mb-4">
-            <Sparkles className="w-3 h-3" />
-            Powered by Orynth
-          </span>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4 tracking-tight font-satoshi">
-            Launch Your Token
-          </h1>
-          <p className="text-base sm:text-lg text-white/50 max-w-2xl mx-auto leading-relaxed px-4">
-            Turn any Reddit post into a tradable creator coin on Solana. You pay the launch costs and trading fees go to the creator.
-          </p>
-        </motion.div>
-      </div>
-
+    <div className="w-full max-w-4xl mx-auto">
       {/* Done state */}
       <AnimatePresence>
         {step === "done" && mintAddress && (

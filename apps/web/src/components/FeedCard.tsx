@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { ArrowUp, MessageSquare, TrendingUp, ExternalLink, BarChart2 } from "lucide-react";
+import { ArrowUp, MessageSquare, TrendingUp, ExternalLink, BarChart2, Copy, Check } from "lucide-react";
 
 export type FeedPost = {
   id: string;
@@ -41,6 +41,7 @@ function formatUsd(value: number): string {
 
 export default function FeedCard({ post, className }: FeedCardProps) {
   const [liveMcap, setLiveMcap] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const timeAgo = useMemo(() => {
     const diffMs = Date.now() - new Date(post.createdAt).getTime();
@@ -166,6 +167,30 @@ export default function FeedCard({ post, className }: FeedCardProps) {
               </a>
             )}
           </div>
+
+          {/* CA row */}
+          {post.tokenMintAddress && (
+            <div
+              className="flex items-center gap-2 mb-2.5 px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] transition-colors cursor-pointer"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigator.clipboard.writeText(post.tokenMintAddress!);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              title="Copy contract address"
+            >
+              <span className="text-[9px] font-bold text-white/30 uppercase tracking-wider shrink-0">CA</span>
+              <span className="text-[10px] font-mono text-white/40 truncate flex-1">
+                {post.tokenMintAddress.slice(0, 8)}…{post.tokenMintAddress.slice(-6)}
+              </span>
+              {copied
+                ? <Check className="h-3 w-3 text-green-400 shrink-0" />
+                : <Copy className="h-3 w-3 text-white/25 shrink-0" />
+              }
+            </div>
+          )}
 
           {/* Stats row */}
           <div className="flex items-center gap-3 pt-2.5 border-t border-white/[0.05] text-[10px] text-white/25 font-medium">

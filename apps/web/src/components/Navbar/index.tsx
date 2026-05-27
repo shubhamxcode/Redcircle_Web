@@ -4,8 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Menu, X, LogOut } from "lucide-react";
 
 const navLinks = [
-  { label: "Feed", to: "/feed" },
-  { label: "Launch", to: "/launch" },
+  { label: "Feed", to: "/home" },
   { label: "Leaderboard", to: "/leaderboard" },
 ];
 

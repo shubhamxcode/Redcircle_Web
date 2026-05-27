@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth";
 import { motion } from "motion/react";
-import { ArrowLeft, ExternalLink, ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, ExternalLink, ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TradingModal from "@/components/TradingModal";
 import PriceChart from "@/components/PriceChart";
@@ -116,6 +116,7 @@ function TokenDetailsPage() {
   const [chartRefreshKey, setChartRefreshKey] = useState(0);
   const [dex, setDex] = useState<DexPair | null>(null);
   const [dexLoading, setDexLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
     try {
@@ -333,8 +334,21 @@ function TokenDetailsPage() {
               <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Token Info</p>
               {post.tokenMintAddress && (
                 <div>
-                  <p className="text-[10px] text-white/30 mb-0.5">Mint Address</p>
-                  <p className="text-[11px] text-white/70 font-mono break-all leading-relaxed">{post.tokenMintAddress}</p>
+                  <p className="text-[10px] text-white/30 mb-1">Mint Address</p>
+                  <div className="flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 py-2">
+                    <p className="text-[11px] text-white/70 font-mono break-all leading-relaxed flex-1">{post.tokenMintAddress}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(post.tokenMintAddress!);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="shrink-0 text-white/40 hover:text-white transition-colors"
+                      title="Copy mint address"
+                    >
+                      {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
