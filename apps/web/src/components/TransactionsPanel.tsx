@@ -311,7 +311,7 @@ export default function TransactionsPanel() {
                           <div className="flex items-center justify-end gap-2">
                             <span>{formatDate(tx.createdAt)}</span>
                             <a
-                              href={`https://solscan.io/tx/${tx.signature}?cluster=devnet`}
+                              href={`https://solscan.io/tx/${tx.signature}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-white/40 transition-colors hover:text-white hidden sm:inline-block"

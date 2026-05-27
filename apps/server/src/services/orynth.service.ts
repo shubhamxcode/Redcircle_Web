@@ -85,7 +85,12 @@ async function orynthFetch<T>(path: string, options: RequestInit = {}): Promise<
   const data = await res.json() as Record<string, unknown>;
   if (!res.ok) {
     console.error(`❌ [Orynth] ${path} → ${res.status}`, JSON.stringify(data));
-    const msg = (data.message ?? data.error ?? `Orynth API ${res.status}`) as string;
+    let msg = (data.message ?? data.error ?? `Orynth API ${res.status}`) as string;
+    if (typeof msg === "string" && msg.toLowerCase().includes("payer needs at least")) {
+      const match = msg.match(/([\d.]+)\s*SOL/i);
+      const sol = match ? parseFloat(match[1]).toFixed(2) : "0.05";
+      msg = `You need at least ${sol} SOL to cover this launch`;
+    }
     throw new Error(msg);
   }
   return data as T;

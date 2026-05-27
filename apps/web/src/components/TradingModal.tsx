@@ -303,7 +303,7 @@ export default function TradingModal({ post, isOpen, onClose }: TradingModalProp
           label: "View on Solscan",
           onClick: () =>
             window.open(
-              `https://solscan.io/tx/${signature}?cluster=devnet`,
+              `https://solscan.io/tx/${signature}`,
               "_blank",
               "noopener,noreferrer"
             ),

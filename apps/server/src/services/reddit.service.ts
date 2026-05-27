@@ -279,11 +279,6 @@ export class RedditService {
       return { valid: false, reason: "Post is too old. Please tokenize posts less than 1 year old." };
     }
 
-    // Check if post has minimum engagement (optional)
-    if (post.upvotes < 10) {
-      return { valid: false, reason: "Post must have at least 10 upvotes to be tokenized." };
-    }
-
     return { valid: true };
   }
 }
