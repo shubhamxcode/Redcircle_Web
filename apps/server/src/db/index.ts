@@ -30,3 +30,4 @@ export * from "./schema/holdings";
 export * from "./schema/transactions";
 export * from "./schema/price-history";
 export * from "./schema/waitlist";
+export * from "./schema/launches";

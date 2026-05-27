@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { SignInPage } from "../components/ui/sign-in";
 import { useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
@@ -6,7 +6,6 @@ import { getApiUrl } from "../lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/signin")({
-  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: SignIn,
   validateSearch: (search: Record<string, unknown>) => {
     return {

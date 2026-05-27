@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, and, gte, lte, like, or, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, like, ilike, or, sql } from "drizzle-orm";
 
 const { posts } = schema;
 const router = Router();
@@ -118,14 +118,14 @@ router.get("/search", async (req, res) => {
       conditions.push(eq(posts.status, status as string));
     }
     
-    // Subreddit exact match
+    // Subreddit — case-insensitive partial match
     if (subreddit) {
-      conditions.push(eq(posts.subreddit, subreddit as string));
+      conditions.push(ilike(posts.subreddit, `%${subreddit}%`));
     }
-    
-    // Author exact match
+
+    // Author — case-insensitive partial match
     if (author) {
-      conditions.push(eq(posts.author, author as string));
+      conditions.push(ilike(posts.author, `%${author}%`));
     }
 
     // Execute base query with conditions
@@ -282,7 +282,7 @@ router.get("/", async (req, res) => {
       conditions.push(eq(posts.status, status));
     }
     if (subreddit) {
-      conditions.push(eq(posts.subreddit, subreddit as string));
+      conditions.push(ilike(posts.subreddit, `%${subreddit}%`));
     }
 
     // Determine sort column

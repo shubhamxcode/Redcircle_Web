@@ -39,7 +39,6 @@ interface TransactionStats {
 }
 
 export const Route = createFileRoute("/transactions")({
-  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: TransactionsPage,
 });
 
@@ -361,7 +360,7 @@ function TransactionsPage() {
 
                         {/* Solscan Link */}
                         <a
-                          href={`https://solscan.io/tx/${tx.signature}?cluster=devnet`}
+                          href={`https://solscan.io/tx/${tx.signature}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-white/40 transition-colors hover:text-white"

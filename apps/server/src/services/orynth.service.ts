@@ -1,0 +1,188 @@
+import { Transaction, Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
+import crypto from "node:crypto";
+
+const BASE_URL = process.env.ORYNTH_API_BASE_URL ?? "https://orynth.dev";
+const API_KEY  = process.env.ORYNTH_PARTNER_API_KEY ?? "";
+
+// ─── Types matching Orynth API contracts ─────────────────────────────────────
+
+export interface PrepareRequest {
+  externalId: string;
+  payerWalletAddress: string;
+  source: {
+    platform: string;
+    url: string;
+    id: string;
+    type: string;
+  };
+  creator: {
+    platform: string;
+    username: string;
+    platformUserId: string;
+    profileUrl: string;
+  };
+  name: string;
+  symbol: string;
+  description: string;
+  imageUrl: string;
+}
+
+export type LaunchStatus = "prepared" | "submitted" | "launched" | "failed";
+
+export interface FeeConfig {
+  totalTradingFeeBps: number;       // 250
+  orynthFeeBps: number;             // 116
+  partnerFeeBps: number;            // 134
+  partnerBucketIncludesCreatorPayouts: boolean;
+  suggestedPartnerShareBps: number; // 67
+  suggestedCreatorShareBps: number; // 67
+  onChain?: {
+    meteoraProtocolFeeBps: number;
+    orynthFeeClaimerBps: number;
+    partnerPoolCreatorFeeBps: number;
+    creatorTradingFeePercentage: number;
+  };
+}
+
+export interface PrepareResponse {
+  success: boolean;
+  launch: {
+    id: string;
+    status: LaunchStatus;
+    preparedTxHex: string;
+    requiredSigners: string[];        // e.g. ["payer", "poolCreator"]
+    feeConfig: FeeConfig;
+  };
+}
+
+export interface StatusResponse {
+  success: boolean;
+  launch: {
+    id: string;
+    status: LaunchStatus;
+    mintAddress?: string;
+    poolAddress?: string;
+    launchSignature?: string;
+    feeConfig?: FeeConfig;
+    source?: Record<string, unknown>;
+    creator?: Record<string, unknown>;
+  };
+}
+
+// ─── HTTP client ─────────────────────────────────────────────────────────────
+
+async function orynthFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Authorization": `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers as Record<string, string> ?? {}),
+    },
+  });
+
+  const data = await res.json() as Record<string, unknown>;
+  if (!res.ok) {
+    console.error(`❌ [Orynth] ${path} → ${res.status}`, JSON.stringify(data));
+    const msg = (data.message ?? data.error ?? `Orynth API ${res.status}`) as string;
+    throw new Error(msg);
+  }
+  return data as T;
+}
+
+// ─── Quote ───────────────────────────────────────────────────────────────────
+// GET /api/v1/launches/quote
+// Returns required SOL, fee split, and signer requirements before a user starts.
+
+export interface QuoteResponse {
+  partner: {
+    id: string;
+    name: string;
+    slug: string;
+    feeWalletAddress: string;
+  };
+  launchCost: {
+    requiredSol: number;
+    uploadPriceSol: number;
+    transactionFeeBufferSol: number;
+  };
+  fees: FeeConfig & {
+    totalTradingFeePercentage: number;
+    orynthFeePercentage: number;
+    partnerFeePercentage: number;
+    suggestedPartnerSharePercentage: number;
+    suggestedCreatorSharePercentage: number;
+  };
+  requiredSigners: {
+    payer: string;
+    poolCreator: string;
+  };
+}
+
+export async function getQuote(): Promise<QuoteResponse> {
+  return orynthFetch<QuoteResponse>("/api/v1/launches/quote");
+}
+
+// ─── Prepare ─────────────────────────────────────────────────────────────────
+// POST /api/v1/launches/prepare
+// Builds the DBC launch transaction. Returns preparedTxHex for payer + partner signatures.
+
+export async function prepareLaunch(req: PrepareRequest): Promise<PrepareResponse> {
+  return orynthFetch<PrepareResponse>("/api/v1/launches/prepare", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+// ─── Sign as poolCreator ─────────────────────────────────────────────────────
+// Partial-signs the prepared tx with our ORYNTH_PARTNER_FEE_WALLET private key.
+// Private key never leaves the server.
+
+export function signAsPoolCreator(preparedTxHex: string): string {
+  const privKeyB58 = process.env.ORYNTH_PARTNER_FEE_WALLET;
+  if (!privKeyB58) throw new Error("ORYNTH_PARTNER_FEE_WALLET not configured");
+
+  const keypair = Keypair.fromSecretKey(bs58.decode(privKeyB58));
+  const tx = Transaction.from(Buffer.from(preparedTxHex, "hex"));
+  tx.partialSign(keypair);
+
+  return tx.serialize({ requireAllSignatures: false }).toString("hex");
+}
+
+// ─── Submit ──────────────────────────────────────────────────────────────────
+// POST /api/v1/launches/submit
+// Accepts launchId + fully-signed txHex. Orynth validates against the prepared message
+// (preventing fee-recipient tampering) and broadcasts.
+
+export async function submitLaunch(launchId: string, signedTxHex: string) {
+  return orynthFetch<{ success: boolean }>("/api/v1/launches/submit", {
+    method: "POST",
+    body: JSON.stringify({ launchId, signedTxHex }),
+  });
+}
+
+// ─── Status ──────────────────────────────────────────────────────────────────
+// GET /api/v1/launches/{launchId}
+// Returns prepared|submitted|launched|failed with mint, pool, and signature details.
+
+export async function getLaunchStatus(orynthLaunchId: string): Promise<StatusResponse> {
+  return orynthFetch<StatusResponse>(`/api/v1/launches/${orynthLaunchId}`);
+}
+
+// ─── Webhook signature verification ──────────────────────────────────────────
+// Orynth signs payloads with HMAC-SHA256 using your webhook secret.
+// Header: x-orynth-signature
+
+export function verifyWebhookSignature(rawBody: string, signature: string): boolean {
+  const secret = process.env.ORYNTH_WEBHOOK_SECRET;
+  if (!secret) return false;
+
+  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  // Constant-time compare
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}

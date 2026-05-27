@@ -9,7 +9,6 @@ const RedditIcon = () => (
 );
 
 export const Route = createFileRoute("/launch")({
-  beforeLoad: () => { throw redirect({ to: "/home" }); },
   component: LaunchPage,
 });
 
