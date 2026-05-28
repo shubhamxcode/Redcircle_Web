@@ -31,6 +31,7 @@ type FeedCardProps = {
   post: FeedPost;
   className?: string;
   onTrade?: (post: FeedPost) => void;
+  index?: number;
 };
 
 function formatUsd(value: number): string {
@@ -39,7 +40,7 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-export default function FeedCard({ post, className }: FeedCardProps) {
+export default function FeedCard({ post, className, index = 0 }: FeedCardProps) {
   const [liveMcap, setLiveMcap] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -81,10 +82,9 @@ export default function FeedCard({ post, className }: FeedCardProps) {
   return (
     <Link to="/token/$tokenId" params={{ tokenId: post.id }}>
       <motion.article
-        initial={{ opacity: 0, y: 16 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index, 8) * 0.055 }}
         className={cn(
           "group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0f0f0f] cursor-pointer h-full transition-all duration-300",
           "hover:border-orange-500/20 hover:shadow-[0_0_0_1px_rgba(249,115,22,0.08),0_16px_48px_-8px_rgba(0,0,0,0.8)]",

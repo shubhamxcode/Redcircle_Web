@@ -221,17 +221,17 @@ export default function LaunchPanel() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="rounded-2xl border border-green-500/20 bg-green-500/5 p-8 text-center space-y-4"
+            className="rounded-2xl border border-green-500/20 bg-green-500/5 p-6 sm:p-8 text-center space-y-4"
           >
-            <CheckCircle className="w-12 h-12 text-green-400 mx-auto" />
-            <h2 className="text-xl font-semibold text-white">Token Launched!</h2>
-            <p className="text-white/60 text-sm">Mint: <span className="font-mono text-white/80">{mintAddress}</span></p>
-            <div className="flex justify-center gap-3">
+            <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-green-400 mx-auto" />
+            <h2 className="text-lg sm:text-xl font-semibold text-white">Token Launched!</h2>
+            <p className="text-white/60 text-xs sm:text-sm break-all px-2">Mint: <span className="font-mono text-white/80">{mintAddress}</span></p>
+            <div className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-3">
               <a
                 href={`https://solscan.io/token/${mintAddress}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
                 View on Solscan
@@ -251,7 +251,7 @@ export default function LaunchPanel() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="relative z-10 bg-neutral-900/50 border border-white/10 rounded-2xl overflow-hidden"
         >
-          <div className="p-6 sm:p-8 md:p-10 space-y-8">
+          <div className="p-4 sm:p-6 md:p-10 space-y-6 sm:space-y-8">
 
             {/* Step 1 — URL */}
             <div className="space-y-4">
@@ -299,7 +299,7 @@ export default function LaunchPanel() {
                 >
                   <div className="h-px w-full bg-white/5" />
 
-                  <div className="grid md:grid-cols-2 gap-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                     {/* Left — post preview + token metadata */}
                     <div className="space-y-6">
                       <div>
@@ -415,7 +415,7 @@ export default function LaunchPanel() {
                         <div className="flex flex-col gap-2">
                           <WalletMultiButton className="!rounded-lg !h-10 !text-sm !w-full !justify-center" />
                           {connected && publicKey && (
-                            <p className="text-xs text-white/40 font-mono truncate text-center">{publicKey.toBase58()}</p>
+                            <p className="text-xs text-white/40 font-mono text-center break-all sm:truncate">{publicKey.toBase58()}</p>
                           )}
                         </div>
                       </div>
@@ -431,7 +431,7 @@ export default function LaunchPanel() {
                   </div>
 
                   {/* Launch button */}
-                  <div className="pt-4 flex flex-col-reverse sm:flex-row justify-end gap-3">
+                  <div className="pt-2 sm:pt-4 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
                     <Button
                       type="button"
                       variant="ghost"

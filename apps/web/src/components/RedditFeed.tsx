@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "motion/react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
 import FeedCard, { type FeedPost } from "@/components/FeedCard";
 import SearchBar, { type SearchFilters } from "@/components/SearchBar";
@@ -170,7 +170,9 @@ export default function RedditFeed() {
     fetchPosts({ refreshing: true, reset: true, currentOffset: 0 });
   };
 
-  // Infinite scroll
+  // Infinite scroll via IntersectionObserver on a sentinel element
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
   const loadMorePosts = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
@@ -182,15 +184,15 @@ export default function RedditFeed() {
   }, [loadingMore, hasMore, fetchPosts, offset]);
 
   useEffect(() => {
-    const onScroll = () => {
-      const { scrollHeight, scrollTop, clientHeight } = document.documentElement;
-      if (scrollHeight - scrollTop - clientHeight < 300 && hasMore && !loadingMore) {
-        loadMorePosts();
-      }
-    };
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [hasMore, loadingMore, loadMorePosts]);
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMorePosts(); },
+      { rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMorePosts]);
 
   return (
     <section className="relative mx-auto w-full max-w-6xl">
@@ -230,64 +232,83 @@ export default function RedditFeed() {
         </div>
       </div>
 
-      {/* Loading skeletons */}
-      {loading && (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-80 animate-pulse rounded-2xl border border-white/5 bg-white/[0.03]"
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Error */}
-      {error && !loading && posts.length === 0 && (
-        <div className="rounded-2xl border border-red-500/15 bg-red-500/5 p-8 text-center">
-          <p className="text-sm text-red-400">{error}</p>
-          <button
-            onClick={handleRefresh}
-            className="mt-4 rounded-xl border border-white/10 bg-white/5 px-5 py-2 text-xs text-white transition-colors hover:bg-white/10"
+      {/* Skeleton — shown on initial load only */}
+      <AnimatePresence mode="wait">
+        {loading && (
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
           >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* Empty */}
-      {!loading && !error && posts.length === 0 && (
-        <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-12 text-center">
-          <p className="text-white/50">No tokenized posts yet</p>
-          <p className="mt-1 text-xs text-white/30">Be the first to tokenize a Reddit post!</p>
-        </div>
-      )}
-
-      {/* Grid */}
-      {!loading && posts.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {posts.map((post) => (
-              <FeedCard key={post.id} post={post} />
-            ))}
-          </div>
-
-          {loadingMore && (
-            <div className="mt-8 flex justify-center">
-              <div className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/5 px-5 py-2.5">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/15 border-t-white/60" />
-                <span className="text-xs text-white/50">Loading more…</span>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0f0f0f]">
+                <div className="h-48 animate-pulse bg-white/[0.04]" />
+                <div className="flex flex-col gap-3 p-4">
+                  <div className="h-3 w-3/4 animate-pulse rounded-full bg-white/[0.04]" />
+                  <div className="h-3 w-1/2 animate-pulse rounded-full bg-white/[0.04]" />
+                  <div className="mt-1 h-2 w-1/3 animate-pulse rounded-full bg-white/[0.03]" />
+                </div>
               </div>
-            </div>
-          )}
+            ))}
+          </motion.div>
+        )}
 
-          {!hasMore && !loadingMore && posts.length > 0 && (
-            <p className="mt-8 text-center text-xs text-white/25">
-              You've seen everything
-            </p>
-          )}
-        </>
-      )}
+        {/* Error */}
+        {error && !loading && posts.length === 0 && (
+          <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="rounded-2xl border border-red-500/15 bg-red-500/5 p-8 text-center">
+            <p className="text-sm text-red-400">{error}</p>
+            <button onClick={handleRefresh}
+              className="mt-4 rounded-xl border border-white/10 bg-white/5 px-5 py-2 text-xs text-white transition-colors hover:bg-white/10">
+              Try Again
+            </button>
+          </motion.div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && posts.length === 0 && (
+          <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="rounded-2xl border border-white/5 bg-white/[0.02] p-12 text-center">
+            <p className="text-white/50">No tokenized posts yet</p>
+            <p className="mt-1 text-xs text-white/30">Be the first to tokenize a Reddit post!</p>
+          </motion.div>
+        )}
+
+        {/* Grid */}
+        {!loading && posts.length > 0 && (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25 }}
+          >
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {posts.map((post, i) => (
+                <FeedCard key={post.id} post={post} index={i} />
+              ))}
+            </div>
+
+            {/* Sentinel for IntersectionObserver */}
+            <div ref={sentinelRef} className="h-1" />
+
+            {loadingMore && (
+              <div className="mt-8 flex justify-center">
+                <div className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/5 px-5 py-2.5">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/15 border-t-white/60" />
+                  <span className="text-xs text-white/50">Loading more…</span>
+                </div>
+              </div>
+            )}
+
+            {!hasMore && !loadingMore && posts.length > 0 && (
+              <p className="mt-8 text-center text-xs text-white/25">You've seen everything</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
