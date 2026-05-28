@@ -88,7 +88,7 @@ async function orynthFetch<T>(path: string, options: RequestInit = {}): Promise<
     let msg = (data.message ?? data.error ?? `Orynth API ${res.status}`) as string;
     if (typeof msg === "string" && msg.toLowerCase().includes("payer needs at least")) {
       const match = msg.match(/([\d.]+)\s*SOL/i);
-      const sol = match ? parseFloat(match[1]).toFixed(2) : "0.05";
+      const sol = match ? parseFloat(match[1]!).toFixed(2) : "0.05";
       msg = `You need at least ${sol} SOL to cover this launch`;
     }
     throw new Error(msg);
@@ -173,6 +173,77 @@ export async function submitLaunch(launchId: string, signedTxHex: string) {
 
 export async function getLaunchStatus(orynthLaunchId: string): Promise<StatusResponse> {
   return orynthFetch<StatusResponse>(`/api/v1/launches/${orynthLaunchId}`);
+}
+
+// ─── Earnings ─────────────────────────────────────────────────────────────────
+// GET /api/v1/earnings?poolAddress=A&poolAddress=B
+// Returns claimable partner earnings per pool.
+
+export interface PoolEarning {
+  poolAddress: string;
+  amountSol: string;
+  claimable: boolean;
+}
+
+export interface EarningsResponse {
+  success: boolean;
+  earnings: PoolEarning[];
+  totalAmountSol: string;
+}
+
+export async function getEarnings(poolAddresses: string[]): Promise<EarningsResponse> {
+  const qs = poolAddresses.map((a) => `poolAddress=${encodeURIComponent(a)}`).join("&");
+  return orynthFetch<EarningsResponse>(`/api/v1/earnings?${qs}`);
+}
+
+// ─── Earnings claim ───────────────────────────────────────────────────────────
+// POST /api/v1/earnings/claim/prepare  → returns claim id + preparedTxHex per pool
+// Sign with ORYNTH_PARTNER_FEE_WALLET (server-side only)
+// POST /api/v1/earnings/claim/submit   → broadcasts signed tx
+
+export interface ClaimPrepareResponse {
+  success: boolean;
+  claim: {
+    id: string;
+    poolAddresses: string[];
+    amountSol: string;
+    preparedTxHex: string;
+  };
+}
+
+export interface ClaimSubmitResponse {
+  success: boolean;
+  claim: {
+    id: string;
+    status: string;
+    signature?: string;
+  };
+}
+
+export async function prepareEarningsClaim(poolAddresses: string[]): Promise<ClaimPrepareResponse> {
+  return orynthFetch<ClaimPrepareResponse>("/api/v1/earnings/claim/prepare", {
+    method: "POST",
+    body: JSON.stringify({ poolAddresses }),
+  });
+}
+
+export async function submitEarningsClaim(claimId: string, signedTxHex: string): Promise<ClaimSubmitResponse> {
+  return orynthFetch<ClaimSubmitResponse>("/api/v1/earnings/claim/submit", {
+    method: "POST",
+    body: JSON.stringify({ claimId, signedTxHex }),
+  });
+}
+
+// Signs a prepared claim tx with the partner fee wallet (same key used as pool creator).
+// Returns the signed tx hex. Private key never leaves the server.
+export function signClaimTx(preparedTxHex: string): string {
+  const privKeyB58 = process.env.ORYNTH_PARTNER_FEE_WALLET;
+  if (!privKeyB58) throw new Error("ORYNTH_PARTNER_FEE_WALLET not configured");
+
+  const keypair = Keypair.fromSecretKey(bs58.decode(privKeyB58));
+  const tx = Transaction.from(Buffer.from(preparedTxHex, "hex"));
+  tx.partialSign(keypair);
+  return tx.serialize({ requireAllSignatures: false }).toString("hex");
 }
 
 // ─── Webhook signature verification ──────────────────────────────────────────

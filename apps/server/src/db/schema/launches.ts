@@ -63,8 +63,15 @@ export const launches = pgTable("launches", {
   creatorFeeBps: integer("creator_fee_bps").default(67),   // 0.67% — creator share
   platformFeeBps: integer("platform_fee_bps").default(67), // 0.67% — platform share
 
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  // On-chain settlement
+  launchSignature:        text("launch_signature"),
+  partnerFeeWalletAddress: text("partner_fee_wallet_address"),
+
+  // Timestamps
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  launchedAt:  timestamp("launched_at",  { withTimezone: true }),
+  createdAt:   timestamp("created_at",   { withTimezone: true }).defaultNow().notNull(),
+  updatedAt:   timestamp("updated_at",   { withTimezone: true }).defaultNow().notNull(),
 });
 
 export type Launch = typeof launches.$inferSelect;

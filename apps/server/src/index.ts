@@ -10,6 +10,7 @@ import leaderboardRoutes from "./routes/leaderboard";
 import priceHistoryRoutes from "./routes/price-history";
 import waitlistRoutes from "./routes/waitlist";
 import launchesRoutes from "./routes/launches";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/price-history", priceHistoryRoutes);
 app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/launches", launchesRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ── DexScreener proxy (avoids browser CORS restrictions) ──────────────────────
 app.get("/api/tokens/:mint/price", async (req, res) => {

@@ -327,7 +327,7 @@ router.post("/webhook", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Invalid signature" });
     }
 
-    const { type, launchId: orynthLaunchId, mintAddress, poolAddress } = req.body as {
+    const { type, launchId: orynthLaunchId, mintAddress, poolAddress, launchSignature } = req.body as {
       type: string;
       launchId: string;
       externalId?: string;
@@ -337,12 +337,16 @@ router.post("/webhook", async (req: Request, res: Response) => {
     };
 
     if (type === "partner_launch.launched" && orynthLaunchId) {
+      const now = new Date();
       await db.update(launches)
         .set({
-          status:      "confirmed",
-          mintAddress: mintAddress,
-          poolAddress: poolAddress,
-          updatedAt:   new Date(),
+          status:          "confirmed",
+          mintAddress:     mintAddress,
+          poolAddress:     poolAddress,
+          launchSignature: launchSignature ?? null,
+          launchedAt:      now,
+          submittedAt:     now,
+          updatedAt:       now,
         })
         .where(eq(launches.orynthLaunchId, orynthLaunchId));
 
