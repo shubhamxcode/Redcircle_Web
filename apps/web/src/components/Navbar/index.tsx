@@ -1,12 +1,24 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu, X, LogOut } from "lucide-react";
+import { Menu, X, LogOut, UserRound } from "lucide-react";
 
 const navLinks = [
   { label: "Feed", to: "/home" },
   { label: "Leaderboard", to: "/leaderboard" },
 ];
+
+function Avatar({ src, alt, className }: { src?: string | null; alt: string; className: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-white/10`}>
+        <UserRound className="w-4 h-4 text-white/50" />
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} className={className} onError={() => setFailed(true)} />;
+}
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -48,8 +60,8 @@ export default function Navbar() {
             {isAuthenticated && user ? (
               <>
                 {/* Avatar always visible */}
-                <img
-                  src={user.avatarUrl || "/logo.png"}
+                <Avatar
+                  src={user.avatarUrl}
                   alt={user.username}
                   className="w-8 h-8 rounded-full border-2 border-white/20 object-cover flex-shrink-0"
                 />
@@ -93,7 +105,7 @@ export default function Navbar() {
           {isAuthenticated && user && (
             <div className="flex items-center justify-between px-3 py-3 mb-2 border-b border-white/8">
               <div className="flex items-center gap-2">
-                <img src={user.avatarUrl || "/logo.png"} alt={user.username}
+                <Avatar src={user.avatarUrl} alt={user.username}
                   className="w-8 h-8 rounded-full border border-white/20 object-cover" />
                 <span className="text-sm font-medium text-white">{user.username}</span>
               </div>
