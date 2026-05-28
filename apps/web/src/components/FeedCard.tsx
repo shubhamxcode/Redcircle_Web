@@ -92,14 +92,21 @@ export default function FeedCard({ post, className }: FeedCardProps) {
         )}
       >
         {/* ── Image header — full-width, edge-to-edge ── */}
-        <div className="relative overflow-hidden bg-neutral-800/60" style={{ height: "12rem" }}>
+        <div className="relative overflow-hidden bg-neutral-900" style={{ height: "12rem" }}>
           {post.imageUrl ? (
-            <img
-              src={post.imageUrl}
-              alt="Post media"
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
-            />
+            <>
+              {/* Blurred ambient background so letterboxed images don't show hard black bars */}
+              <div
+                className="absolute inset-0 scale-110 blur-xl opacity-40"
+                style={{ backgroundImage: `url(${post.imageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }}
+              />
+              <img
+                src={post.imageUrl}
+                alt="Post media"
+                className="relative h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+              />
+            </>
           ) : (
             <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-neutral-800/70 via-neutral-850 to-neutral-900/90">
               <span className="text-7xl font-black text-white/[0.03] select-none">{initial}</span>
