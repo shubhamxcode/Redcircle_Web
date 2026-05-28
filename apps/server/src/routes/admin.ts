@@ -129,8 +129,18 @@ router.get("/earnings", async (_req: Request, res: Response) => {
       return res.json({ success: true, earnings: [], totalAmountSol: "0" });
     }
 
-    const { earnings, totalAmountSol } = await Orynth.getEarnings(poolAddresses);
-    res.json({ success: true, earnings, totalAmountSol });
+    const raw = await Orynth.getEarnings(poolAddresses);
+    const earnings = raw.earnings ?? [];
+
+    // Orynth returns USDC amounts; compute total ourselves since totalAmountSol may be stale
+    const totalClaimableUsdc = earnings
+      .reduce((sum, e) => sum + parseFloat(e.claimableUsdc || "0"), 0)
+      .toFixed(6);
+    const totalClaimedUsdc = earnings
+      .reduce((sum, e) => sum + parseFloat(e.claimedUsdc || "0"), 0)
+      .toFixed(6);
+
+    res.json({ success: true, earnings, totalClaimableUsdc, totalClaimedUsdc, poolAddresses });
   } catch (err) {
     res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed" });
   }
@@ -155,16 +165,16 @@ router.post("/claims", async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "No pool addresses to claim" });
     }
 
-    const claimRows = poolAddresses.map((pool) => ({
-      claimBatchId,
-      poolAddress: pool,
-      status: "preparing" as const,
-    }));
-    await db.insert(claims).values(claimRows);
+    // Seed one DB row per pool so we can track status
+    await db.insert(claims).values(
+      poolAddresses.map((pool) => ({ claimBatchId, poolAddress: pool, status: "preparing" as const }))
+    );
 
+    // ── Step 1: prepare ───────────────────────────────────────────────────────
     let prepared: Orynth.ClaimPrepareResponse;
     try {
       prepared = await Orynth.prepareEarningsClaim(poolAddresses);
+      console.log("[Admin/claims] prepare response:", JSON.stringify(prepared));
     } catch (err) {
       await db.update(claims)
         .set({ status: "failed", errorMessage: err instanceof Error ? err.message : "Prepare failed", updatedAt: new Date() })
@@ -172,41 +182,99 @@ router.post("/claims", async (req: Request, res: Response) => {
       throw err;
     }
 
-    const { id: orynthClaimId, preparedTxHex, amountSol } = prepared.claim;
-
-    let signedTxHex: string;
-    try {
-      signedTxHex = Orynth.signClaimTx(preparedTxHex);
-    } catch (err) {
+    if (!prepared.transactions?.length) {
       await db.update(claims)
-        .set({ status: "failed", orynthClaimId, errorMessage: err instanceof Error ? err.message : "Sign failed", updatedAt: new Date() })
+        .set({ status: "failed", errorMessage: "No claimable transactions returned by Orynth", updatedAt: new Date() })
         .where(eq(claims.claimBatchId, claimBatchId));
+      return res.status(400).json({ success: false, error: "No claimable transactions", skipped: prepared.skipped });
+    }
+
+    const orynthBatchId = prepared.claimBatchId;
+    const totalClaimableUsdc = prepared.transactions
+      .reduce((sum, t) => sum + parseFloat(t.claimableUsdc || "0"), 0)
+      .toFixed(6);
+
+    // Mark skipped pools in DB
+    const skippedPools = new Set((prepared.skipped ?? []).map((s) => s.poolAddress));
+    const activePools  = new Set(prepared.transactions.map((t) => t.poolAddress));
+    for (const pool of skippedPools) {
+      await db.update(claims)
+        .set({ status: "failed", errorMessage: "No claimable earnings", updatedAt: new Date() })
+        .where(and(eq(claims.claimBatchId, claimBatchId), eq(claims.poolAddress, pool)));
+    }
+
+    // ── Step 2: sign each transaction ─────────────────────────────────────────
+    const signedTransactions: { poolAddress: string; signedTxHex: string }[] = [];
+    try {
+      for (const tx of prepared.transactions) {
+        signedTransactions.push({ poolAddress: tx.poolAddress, signedTxHex: Orynth.signClaimTx(tx.txHex) });
+      }
+    } catch (err) {
+      for (const pool of activePools) {
+        await db.update(claims)
+          .set({ status: "failed", orynthClaimId: orynthBatchId, errorMessage: err instanceof Error ? err.message : "Sign failed", updatedAt: new Date() })
+          .where(and(eq(claims.claimBatchId, claimBatchId), eq(claims.poolAddress, pool)));
+      }
       throw err;
     }
 
-    await db.update(claims)
-      .set({ orynthClaimId, amountSol, status: "signed", updatedAt: new Date() })
-      .where(eq(claims.claimBatchId, claimBatchId));
+    for (const tx of prepared.transactions) {
+      await db.update(claims)
+        .set({ orynthClaimId: orynthBatchId, amountSol: tx.claimableUsdc, status: "signed", updatedAt: new Date() })
+        .where(and(eq(claims.claimBatchId, claimBatchId), eq(claims.poolAddress, tx.poolAddress)));
+    }
 
+    // ── Step 3: submit ────────────────────────────────────────────────────────
     let submitted: Orynth.ClaimSubmitResponse;
     try {
-      submitted = await Orynth.submitEarningsClaim(orynthClaimId, signedTxHex);
+      submitted = await Orynth.submitEarningsClaim(orynthBatchId, signedTransactions);
+      console.log("[Admin/claims] submit response:", JSON.stringify(submitted));
     } catch (err) {
-      await db.update(claims)
-        .set({ status: "failed", errorMessage: err instanceof Error ? err.message : "Submit failed", updatedAt: new Date() })
-        .where(eq(claims.claimBatchId, claimBatchId));
+      for (const pool of activePools) {
+        await db.update(claims)
+          .set({ status: "failed", errorMessage: err instanceof Error ? err.message : "Submit failed", updatedAt: new Date() })
+          .where(and(eq(claims.claimBatchId, claimBatchId), eq(claims.poolAddress, pool)));
+      }
       throw err;
     }
 
-    const finalStatus = submitted.claim.status === "confirmed" ? "confirmed" : "submitted";
-    await db.update(claims)
-      .set({ status: finalStatus, signature: submitted.claim.signature ?? null, updatedAt: new Date() })
-      .where(eq(claims.claimBatchId, claimBatchId));
+    // Mark each pool row with its individual result if available
+    if (submitted.results?.length) {
+      for (const result of submitted.results) {
+        await db.update(claims)
+          .set({
+            status: result.success ? "confirmed" : "failed",
+            signature: result.signature ?? null,
+            errorMessage: result.success ? null : (result.error ?? null),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(claims.claimBatchId, claimBatchId), eq(claims.poolAddress, result.poolAddress)));
+      }
+    } else {
+      // No per-pool results — mark all active pools as submitted
+      for (const pool of activePools) {
+        await db.update(claims)
+          .set({ status: "submitted", updatedAt: new Date() })
+          .where(and(eq(claims.claimBatchId, claimBatchId), eq(claims.poolAddress, pool)));
+      }
+    }
 
-    res.json({ success: true, claimBatchId, orynthClaimId, amountSol, status: finalStatus, signature: submitted.claim.signature });
+    res.json({
+      success: true,
+      claimBatchId,
+      orynthBatchId,
+      totalClaimableUsdc,
+      txCount: signedTransactions.length,
+      skippedCount: prepared.skipped?.length ?? 0,
+      results: submitted.results ?? [],
+    });
   } catch (err) {
     console.error("❌ [Admin/claims] Error:", err);
-    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Claim failed" });
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : "Claim failed",
+      details: (err as any)?.orynthDetails ?? null,
+    });
   }
 });
 

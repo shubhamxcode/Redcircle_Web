@@ -381,7 +381,7 @@ function TokenDetailsPage() {
                   href={post.redditUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#E8431C] hover:text-[#FF5535] transition-colors"
                 >
                   View on Reddit <ExternalLink className="h-3 w-3" />
                 </a>

@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { ArrowUp, MessageSquare, TrendingUp, ExternalLink, BarChart2, Copy, Check } from "lucide-react";
+import { ArrowUp, MessageSquare, TrendingUp, ExternalLink, BarChart2, Copy, Check, TrendingDown } from "lucide-react";
 
 export type FeedPost = {
   id: string;
@@ -42,6 +42,7 @@ function formatUsd(value: number): string {
 
 export default function FeedCard({ post, className, index = 0 }: FeedCardProps) {
   const [liveMcap, setLiveMcap] = useState<string | null>(null);
+  const [h24Change, setH24Change] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   const timeAgo = useMemo(() => {
@@ -66,6 +67,8 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
         if (cancelled) return;
         const value = data.pair?.fdv ?? data.pair?.marketCap;
         if (value && value > 0) setLiveMcap(formatUsd(value));
+        const ch = (data.pair as any)?.priceChange?.h24;
+        if (ch != null) setH24Change(ch);
       } catch {
         // silently fail — card still renders without MCap
       }
@@ -78,6 +81,7 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
   const mcapDisplay = liveMcap ?? (post.marketCap && post.marketCap > 0 ? formatUsd(post.marketCap) : "—");
   const hasMcap = mcapDisplay !== "—";
   const initial = (post.subreddit ?? "R").slice(0, 1).toUpperCase();
+  const isNew = Date.now() - new Date(post.createdAt).getTime() < 24 * 60 * 60 * 1000;
 
   return (
     <Link to="/token/$tokenId" params={{ tokenId: post.id }}>
@@ -86,11 +90,15 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut", delay: Math.min(index, 8) * 0.055 }}
         className={cn(
-          "group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#0f0f0f] cursor-pointer h-full transition-all duration-300",
-          "hover:border-orange-500/20 hover:shadow-[0_0_0_1px_rgba(249,115,22,0.08),0_16px_48px_-8px_rgba(0,0,0,0.8)]",
+          "group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0c0c0c] cursor-pointer h-full transition-all duration-300",
+          "hover:border-[#E8431C]/25 hover:shadow-[0_0_0_1px_rgba(232,67,28,0.1),0_20px_60px_-12px_rgba(232,67,28,0.12),0_0_0_0_transparent]",
+          "hover:-translate-y-0.5",
           className,
         )}
       >
+        {/* Top-edge accent line — only visible on hover */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#E8431C]/0 to-transparent group-hover:via-[#E8431C]/40 transition-all duration-500 z-10" />
+
         {/* ── Image header — full-width, edge-to-edge ── */}
         <div className="relative overflow-hidden bg-neutral-900" style={{ height: "12rem" }}>
           {post.imageUrl ? (
@@ -118,7 +126,7 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
 
           {/* Subreddit + time — bottom-left */}
           <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5">
-            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-orange-500/20 text-orange-500 text-[7px] font-black flex-shrink-0">r/</span>
+            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-[#E8431C]/20 text-[#E8431C] text-[7px] font-black flex-shrink-0">r/</span>
             <span className="text-[11px] font-medium text-white/60 drop-shadow-sm">{post.subreddit}</span>
             <span className="text-white/25 text-[10px]">·</span>
             <span className="text-[10px] text-white/35 drop-shadow-sm">{timeAgo}</span>
@@ -127,12 +135,28 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
           {/* Badges — top-right */}
           <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1.5">
             {post.tokenSymbol && (
-              <span className="text-[10px] font-bold text-white/70 bg-black/50 backdrop-blur-md border border-white/10 rounded-md px-2 py-0.5 tracking-wide">
+              <span className="text-[10px] font-bold text-white/80 bg-black/60 backdrop-blur-md border border-white/15 rounded-md px-2 py-0.5 tracking-wide">
                 ${post.tokenSymbol}
               </span>
             )}
-            {post.isTrending && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-orange-500/15 border border-orange-500/25 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-semibold text-orange-400">
+            {h24Change != null && (
+              <span className={cn(
+                "inline-flex items-center gap-0.5 rounded-md backdrop-blur-md px-1.5 py-0.5 text-[9px] font-bold font-mono border",
+                h24Change >= 0
+                  ? "bg-[#00FFD1]/10 border-[#00FFD1]/25 text-[#00FFD1]"
+                  : "bg-red-500/15 border-red-500/25 text-red-400",
+              )}>
+                {h24Change >= 0 ? <TrendingUp className="h-2 w-2" /> : <TrendingDown className="h-2 w-2" />}
+                {h24Change >= 0 ? "+" : ""}{h24Change.toFixed(1)}%
+              </span>
+            )}
+            {isNew && (
+              <span className="inline-flex items-center rounded-md bg-violet-500/15 border border-violet-500/30 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-bold text-violet-400 shadow-[0_0_8px_rgba(139,92,246,0.25)] tracking-wider">
+                NEW
+              </span>
+            )}
+            {post.isTrending && !isNew && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E8431C]/20 border border-[#E8431C]/35 backdrop-blur-md px-1.5 py-0.5 text-[9px] font-semibold text-[#E8431C] shadow-[0_0_8px_rgba(232,67,28,0.3)]">
                 <TrendingUp className="h-2 w-2" /> Hot
               </span>
             )}
@@ -167,7 +191,7 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/8 hover:bg-orange-500/15 border border-orange-500/15 hover:border-orange-500/30 text-orange-400/70 hover:text-orange-400 text-[10px] font-medium transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E8431C]/8 hover:bg-[#E8431C]/15 border border-[#E8431C]/15 hover:border-[#E8431C]/30 text-[#E8431C]/70 hover:text-[#E8431C] text-[10px] font-medium transition-all"
               >
                 <ExternalLink className="h-2.5 w-2.5" />
                 Reddit

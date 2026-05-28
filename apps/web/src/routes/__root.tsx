@@ -1,6 +1,7 @@
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import Navbar from "@/components/Navbar";
+import TickerBar from "@/components/TickerBar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { WalletContextProvider } from "@/contexts/WalletContext";
 import {
@@ -8,7 +9,6 @@ import {
 	Outlet,
 	createRootRouteWithContext,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import "../index.css";
 import { Buffer } from 'buffer';
 
@@ -52,10 +52,11 @@ function RootComponent() {
 			>
 				<WalletContextProvider>
 					<AuthProvider>
-						 <Navbar />
-						 <div className="pt-16 sm:pt-16 md:pt-16">
-							 <Outlet />
-						 </div>
+						<Navbar />
+						<TickerBar />
+						<div className="pt-24">
+							<Outlet />
+						</div>
 						<Toaster richColors />
 					</AuthProvider>
 				</WalletContextProvider>

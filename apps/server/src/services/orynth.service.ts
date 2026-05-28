@@ -84,14 +84,18 @@ async function orynthFetch<T>(path: string, options: RequestInit = {}): Promise<
 
   const data = await res.json() as Record<string, unknown>;
   if (!res.ok) {
-    console.error(`❌ [Orynth] ${path} → ${res.status}`, JSON.stringify(data));
+    console.error(`❌ [Orynth] ${path} → ${res.status}`);
+    console.error(`❌ [Orynth] error:`, data.error);
+    console.error(`❌ [Orynth] details:`, JSON.stringify(data.details, null, 2));
     let msg = (data.message ?? data.error ?? `Orynth API ${res.status}`) as string;
     if (typeof msg === "string" && msg.toLowerCase().includes("payer needs at least")) {
       const match = msg.match(/([\d.]+)\s*SOL/i);
       const sol = match ? parseFloat(match[1]!).toFixed(2) : "0.05";
       msg = `You need at least ${sol} SOL to cover this launch`;
     }
-    throw new Error(msg);
+    const err = new Error(msg) as Error & { orynthDetails?: unknown };
+    err.orynthDetails = data.details;
+    throw err;
   }
   return data as T;
 }
@@ -180,9 +184,21 @@ export async function getLaunchStatus(orynthLaunchId: string): Promise<StatusRes
 // Returns claimable partner earnings per pool.
 
 export interface PoolEarning {
+  launchId?: string;
+  externalId?: string;
   poolAddress: string;
-  amountSol: string;
-  claimable: boolean;
+  mintAddress?: string;
+  symbol?: string;
+  name?: string;
+  poolCreatorWalletAddress?: string;
+  claimableLamports: string;
+  claimedLamports: string;
+  totalLamports: string;
+  claimableUsdc: string;
+  claimedUsdc: string;
+  totalUsdc: string;
+  isMigrated: boolean;
+  supported: boolean;
 }
 
 export interface EarningsResponse {
@@ -201,23 +217,37 @@ export async function getEarnings(poolAddresses: string[]): Promise<EarningsResp
 // Sign with ORYNTH_PARTNER_FEE_WALLET (server-side only)
 // POST /api/v1/earnings/claim/submit   → broadcasts signed tx
 
+export interface ClaimTransaction {
+  poolAddress: string;
+  launchId?: string;
+  claimableLamports: string;
+  claimableUsdc: string;
+  txHex: string;
+  requiredSigner: string;
+  receiverWalletAddress: string;
+  blockhash: string;
+  lastValidBlockHeight: number;
+}
+
 export interface ClaimPrepareResponse {
   success: boolean;
-  claim: {
-    id: string;
-    poolAddresses: string[];
-    amountSol: string;
-    preparedTxHex: string;
-  };
+  claimBatchId: string;
+  transactions: ClaimTransaction[];
+  skipped: { poolAddress: string; reason: string }[];
+}
+
+export interface ClaimSubmitResult {
+  poolAddress: string;
+  success: boolean;
+  signature?: string;
+  error?: string;
+  status?: string;
 }
 
 export interface ClaimSubmitResponse {
   success: boolean;
-  claim: {
-    id: string;
-    status: string;
-    signature?: string;
-  };
+  claimBatchId?: string;
+  results?: ClaimSubmitResult[];
 }
 
 export async function prepareEarningsClaim(poolAddresses: string[]): Promise<ClaimPrepareResponse> {
@@ -227,10 +257,21 @@ export async function prepareEarningsClaim(poolAddresses: string[]): Promise<Cla
   });
 }
 
-export async function submitEarningsClaim(claimId: string, signedTxHex: string): Promise<ClaimSubmitResponse> {
+export async function submitEarningsClaim(
+  claimBatchId: string,
+  signedTransactions: { poolAddress: string; signedTxHex: string }[],
+): Promise<ClaimSubmitResponse> {
+  // Orynth submit expects `signedTransactions` with `signedTxHex` per entry
+  const payload = {
+    claimBatchId,
+    signedTransactions: signedTransactions.map(({ poolAddress, signedTxHex }) => ({
+      poolAddress,
+      signedTxHex,
+    })),
+  };
   return orynthFetch<ClaimSubmitResponse>("/api/v1/earnings/claim/submit", {
     method: "POST",
-    body: JSON.stringify({ claimId, signedTxHex }),
+    body: JSON.stringify(payload),
   });
 }
 

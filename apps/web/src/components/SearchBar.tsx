@@ -105,13 +105,13 @@ export default function SearchBar({
             className={cn(
               "h-12 rounded-2xl border border-white/5 bg-neutral-900/60 px-5 text-sm text-white/50 hover:bg-neutral-900 hover:text-white hover:border-white/10 transition-all gap-2",
               showAdvancedFilters && "bg-neutral-900 border-white/10 text-white",
-              hasActiveFilters && "text-orange-400 border-orange-500/20 bg-orange-500/5",
+              hasActiveFilters && "text-[#E8431C] border-[#E8431C]/20 bg-[#E8431C]/5",
             )}
           >
             <Filter className="h-4 w-4" />
             <span className="hidden sm:inline">Filters</span>
             {activeFilterCount > 0 && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#E8431C] text-[10px] font-bold text-white">
                 {activeFilterCount}
               </span>
             )}

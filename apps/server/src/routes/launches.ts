@@ -5,6 +5,7 @@ import { db } from "../db";
 import { launches, posts } from "../db";
 import { authenticateToken } from "../middleware/auth";
 import * as Orynth from "../services/orynth.service";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router: express.Router = express.Router();
 
@@ -61,6 +62,62 @@ async function syncLaunchToFeed(launch: LaunchRow) {
     console.warn("Could not sync launch to posts feed:", e);
   }
 }
+
+// ─── POST /api/launches/suggest-name ─────────────────────────────────────────
+// Use Gemini to generate a creative token name + ticker from Reddit post context.
+
+router.post("/suggest-name", async (req: Request, res: Response) => {
+  const { title, subreddit, content } = req.body as {
+    title?: string; subreddit?: string; content?: string;
+  };
+
+  if (!title) {
+    res.status(400).json({ error: "title is required" });
+    return;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: "GEMINI_API_KEY not configured" });
+    return;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const prompt = `You are a crypto token naming expert. Given a Reddit post, generate a catchy, memorable token name and ticker that captures the essence of the post.
+
+Reddit post:
+- Title: ${title}
+- Subreddit: r/${subreddit ?? "unknown"}
+${content ? `- Content snippet: ${content.slice(0, 300)}` : ""}
+
+Rules:
+- NAME: 3–10 characters, can be a word, abbreviation, or creative portmanteau. Memorable and relevant to the post topic.
+- SYMBOL: 3–8 uppercase letters/numbers only, no spaces. Short and punchy.
+- Do NOT use generic words like "Token", "Coin", "Crypto", "Moon", "Gem".
+- Make it feel native to the post's actual topic.
+
+Respond with valid JSON only, no markdown:
+{"name": "...", "symbol": "..."}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    // Strip markdown code fences if present
+    const json = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    const parsed = JSON.parse(json) as { name: string; symbol: string };
+
+    res.json({
+      name:   String(parsed.name).slice(0, 32),
+      symbol: String(parsed.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8),
+    });
+  } catch (err) {
+    console.error("Gemini suggest-name error:", err);
+    res.status(500).json({ error: "Failed to generate suggestion" });
+  }
+});
 
 // ─── GET /api/launches/quote ──────────────────────────────────────────────────
 // Show launch cost + fee split before the user commits.

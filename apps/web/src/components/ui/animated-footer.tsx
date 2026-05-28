@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { TwitterIcon, GithubIcon, LinkedinIcon, Copy, Check } from "lucide-react";
+import { TwitterIcon, GithubIcon, Copy, Check } from "lucide-react";
 
 const CA = "BUCUTDnUZteDkMDWyqYtavDhvAFEFVn9YKD3jj6qvory";
 
@@ -133,10 +133,8 @@ export function AnimatedFooter() {
         {/* Links */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
           <MotionCol title="Platform" links={[
-            { label: "Feed", href: "/" },
-            { label: "Launch Token", href: "/launch" },
+            { label: "Feed", href: "/home" },
             { label: "Leaderboard", href: "/leaderboard" },
-            { label: "Portfolio", href: "/portfolio" },
           ]} delay={0.05} />
           <MotionCol title="Legal" links={[
             { label: "Privacy Policy", href: "/privacy" },
@@ -151,8 +149,7 @@ export function AnimatedFooter() {
             <h3 className="text-xs uppercase tracking-wider text-neutral-500 mb-4 font-satoshi">Follow</h3>
             <div className="flex items-center gap-5 text-neutral-400">
               <a className="hover:text-white transition-colors" href="https://x.com/redcircle_sol" target="_blank" rel="noreferrer" aria-label="X / Twitter"><TwitterIcon className="w-5 h-5" /></a>
-              <a className="hover:text-white transition-colors" href="https://github.com/adityaslyf" target="_blank" rel="noreferrer" aria-label="GitHub"><GithubIcon className="w-5 h-5" /></a>
-              <a className="hover:text-white transition-colors" href="https://www.linkedin.com/in/aditya-varshney-089b33244/" target="_blank" rel="noreferrer" aria-label="LinkedIn"><LinkedinIcon className="w-5 h-5" /></a>
+              <a className="hover:text-white transition-colors" href="https://github.com/redcircle-lol" target="_blank" rel="noreferrer" aria-label="GitHub"><GithubIcon className="w-5 h-5" /></a>
             </div>
           </motion.div>
         </div>

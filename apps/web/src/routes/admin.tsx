@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { getApiUrl } from "@/lib/auth";
 import { Copy, Check, RefreshCw, Zap, ExternalLink, RotateCcw } from "lucide-react";
 
@@ -24,9 +24,18 @@ interface Launch {
 }
 
 interface PoolEarning {
+  launchId?: string;
   poolAddress: string;
-  amountSol: string;
-  claimable: boolean;
+  mintAddress?: string;
+  symbol?: string;
+  name?: string;
+  claimableLamports: string;
+  claimedLamports: string;
+  claimableUsdc: string;
+  claimedUsdc: string;
+  totalUsdc: string;
+  isMigrated: boolean;
+  supported: boolean;
 }
 
 interface ClaimRow {
@@ -78,7 +87,8 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [launches, setLaunches] = useState<Launch[]>([]);
   const [earningsMap, setEarningsMap] = useState<Record<string, PoolEarning>>({});
-  const [totalClaimable, setTotalClaimable] = useState("0");
+  const [totalClaimableUsdc, setTotalClaimableUsdc] = useState("0");
+  const [totalClaimedUsdc, setTotalClaimedUsdc] = useState("0");
   const [claimHistory, setClaimHistory] = useState<ClaimRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -88,6 +98,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
 
   const apiUrl = getApiUrl();
+  const didAutoAuth = useRef(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -111,10 +122,12 @@ export default function AdminPage() {
         const map: Record<string, PoolEarning> = {};
         for (const e of earningsData.earnings) map[e.poolAddress] = e;
         setEarningsMap(map);
-        setTotalClaimable(earningsData.totalAmountSol ?? "0");
+        setTotalClaimableUsdc(earningsData.totalClaimableUsdc ?? "0");
+        setTotalClaimedUsdc(earningsData.totalClaimedUsdc ?? "0");
       } else {
         setEarningsMap({});
-        setTotalClaimable("0");
+        setTotalClaimableUsdc("0");
+        setTotalClaimedUsdc("0");
       }
 
       setClaimHistory(claimsData.claims ?? []);
@@ -125,6 +138,13 @@ export default function AdminPage() {
       setLoading(false);
     }
   }, [apiUrl]);
+
+  // Auto-authenticate on mount if a secret is already saved
+  useEffect(() => {
+    if (didAutoAuth.current) return;
+    didAutoAuth.current = true;
+    if (getAdminSecret()) fetchAll();
+  }, [fetchAll]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +261,7 @@ export default function AdminPage() {
           { label: "Pending",   value: pending.length,            color: "text-yellow-400" },
           { label: "Failed",    value: failed.length,             color: "text-red-400" },
           { label: "Pools",     value: confirmed.filter(l => l.poolAddress).length, color: "text-blue-400" },
-          { label: "Claimable (SOL)", value: parseFloat(totalClaimable).toFixed(4), color: "text-orange-400" },
+          { label: "Claimable (USDC)", value: `$${parseFloat(totalClaimableUsdc).toFixed(2)}`, color: "text-[#E8431C]" },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <p className="text-zinc-400 text-xs mb-1">{label}</p>
@@ -257,37 +277,65 @@ export default function AdminPage() {
             <h2 className="text-white font-semibold">Partner Earnings</h2>
             <p className="text-zinc-400 text-sm">Claimable from Orynth across all pools</p>
           </div>
-          <button onClick={handleClaimAll} disabled={claiming || parseFloat(totalClaimable) === 0}
+          <button onClick={handleClaimAll} disabled={claiming || parseFloat(totalClaimableUsdc) === 0}
             className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg px-5 py-2 text-sm font-semibold transition-colors">
             <Zap size={14} />
             {claiming ? "Claiming…" : "Claim All"}
           </button>
         </div>
 
+        {/* Summary row */}
+        <div className="flex gap-6 mb-4 text-sm">
+          <div>
+            <span className="text-zinc-500">Claimable</span>
+            <span className="ml-2 text-green-400 font-mono font-semibold">${parseFloat(totalClaimableUsdc).toFixed(4)} USDC</span>
+          </div>
+          <div>
+            <span className="text-zinc-500">Claimed</span>
+            <span className="ml-2 text-zinc-300 font-mono">${parseFloat(totalClaimedUsdc).toFixed(4)} USDC</span>
+          </div>
+        </div>
+
         {Object.keys(earningsMap).length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-zinc-500 border-b border-zinc-800">
-                  <th className="text-left py-2 font-medium">Pool Address</th>
-                  <th className="text-right py-2 font-medium">Amount (SOL)</th>
-                  <th className="text-right py-2 font-medium">Claimable</th>
+                <tr className="text-zinc-500 border-b border-zinc-800 text-xs uppercase tracking-wide">
+                  <th className="text-left py-2 font-medium">Token</th>
+                  <th className="text-left py-2 font-medium">Pool</th>
+                  <th className="text-right py-2 font-medium">Claimable (USDC)</th>
+                  <th className="text-right py-2 font-medium">Claimed (USDC)</th>
+                  <th className="text-right py-2 font-medium">Total (USDC)</th>
                 </tr>
               </thead>
               <tbody>
-                {Object.values(earningsMap).map((e) => (
-                  <tr key={e.poolAddress} className="border-b border-zinc-800/50">
-                    <td className="py-2 font-mono text-xs text-zinc-300">
-                      {shortAddr(e.poolAddress)}<CopyButton value={e.poolAddress} />
-                    </td>
-                    <td className="py-2 text-right text-green-400 font-mono">{parseFloat(e.amountSol).toFixed(6)}</td>
-                    <td className="py-2 text-right">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${e.claimable ? "bg-green-900 text-green-300" : "bg-zinc-800 text-zinc-500"}`}>
-                        {e.claimable ? "Yes" : "No"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {Object.values(earningsMap).map((e) => {
+                  const claimable = parseFloat(e.claimableUsdc || "0") > 0;
+                  return (
+                    <tr key={e.poolAddress} className="border-b border-zinc-800/50 hover:bg-zinc-800/20">
+                      <td className="py-2 pr-3">
+                        <div className="flex flex-col">
+                          <span className="text-white text-xs font-medium">{e.name ?? "—"}</span>
+                          <span className="text-zinc-500 text-xs">{e.symbol}</span>
+                        </div>
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-xs text-zinc-300">
+                        {shortAddr(e.poolAddress)}<CopyButton value={e.poolAddress} />
+                      </td>
+                      <td className="py-2 pr-3 text-right font-mono text-xs">
+                        <span className={claimable ? "text-green-400" : "text-zinc-500"}>
+                          ${parseFloat(e.claimableUsdc || "0").toFixed(4)}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 text-right font-mono text-xs text-zinc-400">
+                        ${parseFloat(e.claimedUsdc || "0").toFixed(4)}
+                      </td>
+                      <td className="py-2 text-right font-mono text-xs text-zinc-300">
+                        ${parseFloat(e.totalUsdc || "0").toFixed(4)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -334,7 +382,7 @@ export default function AdminPage() {
                 <th className="text-left py-2 font-medium">Mint</th>
                 <th className="text-left py-2 font-medium">Pool</th>
                 <th className="text-left py-2 font-medium">Launch Sig</th>
-                <th className="text-right py-2 font-medium">Earnings</th>
+                <th className="text-right py-2 font-medium">Claimable (USDC)</th>
                 <th className="text-left py-2 font-medium">Launched</th>
               </tr>
             </thead>
@@ -351,7 +399,7 @@ export default function AdminPage() {
                       <div className="flex items-center gap-1.5">
                         {l.mintAddress ? (
                           <Link to="/token/$tokenId" params={{ tokenId: l.mintAddress }}
-                            className="text-white font-medium hover:text-orange-400 transition-colors">
+                            className="text-white font-medium hover:text-[#E8431C] transition-colors">
                             {l.tokenName}
                           </Link>
                         ) : (
@@ -413,8 +461,8 @@ export default function AdminPage() {
                     {/* Claimable earnings */}
                     <td className="py-2 pr-3 text-right font-mono text-xs">
                       {earning ? (
-                        <span className={earning.claimable ? "text-green-400" : "text-zinc-500"}>
-                          {parseFloat(earning.amountSol).toFixed(4)} SOL
+                        <span className={parseFloat(earning.claimableUsdc || "0") > 0 ? "text-green-400" : "text-zinc-500"}>
+                          ${parseFloat(earning.claimableUsdc || "0").toFixed(4)}
                         </span>
                       ) : "—"}
                     </td>
@@ -432,59 +480,93 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Claim History */}
+      {/* Claim History — grouped by batch */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <h2 className="text-white font-semibold mb-4">Claim History</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-zinc-500 border-b border-zinc-800 text-xs uppercase tracking-wide">
-                <th className="text-left py-2 font-medium">Batch</th>
-                <th className="text-left py-2 font-medium">Pool</th>
-                <th className="text-left py-2 font-medium">Status</th>
-                <th className="text-right py-2 font-medium">Amount (SOL)</th>
-                <th className="text-left py-2 font-medium">Signature</th>
-                <th className="text-left py-2 font-medium">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {claimHistory.length === 0 && (
-                <tr><td colSpan={6} className="py-6 text-center text-zinc-500">{loading ? "Loading…" : "No claims yet"}</td></tr>
-              )}
-              {claimHistory.map((c) => (
-                <tr key={c.id} className="border-b border-zinc-800/50">
-                  <td className="py-2 font-mono text-xs text-zinc-400">{c.claimBatchId.slice(0, 8)}…</td>
-                  <td className="py-2 font-mono text-xs text-zinc-300">
-                    {shortAddr(c.poolAddress)}<CopyButton value={c.poolAddress} />
-                  </td>
-                  <td className="py-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[c.status] ?? "bg-zinc-800 text-zinc-400"}`}>
-                      {c.status}
-                    </span>
-                    {c.errorMessage && (
-                      <span className="ml-1 text-red-400 text-xs cursor-help" title={c.errorMessage}>⚠</span>
+        {(() => {
+          // Group rows by claimBatchId, newest first
+          const batches = claimHistory.reduce<Record<string, ClaimRow[]>>((acc, c) => {
+            (acc[c.claimBatchId] ??= []).push(c);
+            return acc;
+          }, {});
+          const batchIds = Object.keys(batches).sort(
+            (a, b) => new Date(batches[b][0].createdAt).getTime() - new Date(batches[a][0].createdAt).getTime()
+          );
+
+          if (!batchIds.length) {
+            return <p className="text-zinc-500 text-sm">{loading ? "Loading…" : "No claims yet"}</p>;
+          }
+
+          return (
+            <div className="space-y-3">
+              {batchIds.map((batchId) => {
+                const rows = batches[batchId];
+                const confirmed = rows.filter((r) => r.status === "confirmed");
+                const failed    = rows.filter((r) => r.status === "failed");
+                const active    = rows.filter((r) => !["failed", "confirmed"].includes(r.status));
+                // Batch-level status
+                const batchStatus = confirmed.length > 0 ? "confirmed"
+                  : active.length > 0 ? active[0].status
+                  : "failed";
+                const confirmedSum = confirmed.reduce((s, r) => s + parseFloat(r.amountSol ?? "0"), 0);
+                const totalUsdc = confirmedSum > 0
+                  ? confirmedSum.toFixed(4)
+                  : rows.some(r => r.amountSol)
+                    ? rows.reduce((s, r) => s + parseFloat(r.amountSol ?? "0"), 0).toFixed(4)
+                    : null;
+                const date = new Date(rows[0].createdAt);
+
+                return (
+                  <div key={batchId} className="border border-zinc-800 rounded-lg overflow-hidden">
+                    {/* Batch header */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/40">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          batchStatus === "confirmed" ? "bg-green-900 text-green-300"
+                          : batchStatus === "failed"  ? "bg-red-900 text-red-300"
+                          : "bg-yellow-900 text-yellow-300"
+                        }`}>
+                          {batchStatus}
+                        </span>
+                        <span className="font-mono text-xs text-zinc-400">{batchId.slice(0, 8)}…</span>
+                        <span className="text-zinc-500 text-xs">
+                          {confirmed.length} confirmed · {failed.length} failed · {rows.length} pools
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {totalUsdc && (
+                          <span className="font-mono text-xs text-green-400">${totalUsdc} USDC</span>
+                        )}
+                        <span className="text-zinc-500 text-xs">{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    </div>
+                    {/* Only show confirmed rows in the detail — skip noise */}
+                    {confirmed.length > 0 && (
+                      <div className="divide-y divide-zinc-800/50">
+                        {confirmed.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between px-4 py-2 text-xs">
+                            <span className="font-mono text-zinc-300">{shortAddr(c.poolAddress)}<CopyButton value={c.poolAddress} /></span>
+                            <span className="font-mono text-green-400">${c.amountSol ? parseFloat(c.amountSol).toFixed(6) : "—"} USDC</span>
+                            {c.signature ? (
+                              <span className="flex items-center gap-1 font-mono text-zinc-400">
+                                {shortAddr(c.signature)}
+                                <CopyButton value={c.signature} />
+                                <a href={`https://solscan.io/tx/${c.signature}`} target="_blank" rel="noreferrer"
+                                  className="text-zinc-500 hover:text-blue-400"><ExternalLink size={10} /></a>
+                              </span>
+                            ) : <span className="text-zinc-600">no sig</span>}
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </td>
-                  <td className="py-2 text-right font-mono text-green-400 text-xs">
-                    {c.amountSol ? `${parseFloat(c.amountSol).toFixed(6)} SOL` : "—"}
-                  </td>
-                  <td className="py-2 font-mono text-xs text-zinc-300">
-                    {c.signature ? (
-                      <span className="flex items-center gap-0.5">
-                        {shortAddr(c.signature)}
-                        <CopyButton value={c.signature} />
-                        <a href={`https://solscan.io/tx/${c.signature}`} target="_blank" rel="noreferrer"
-                          className="text-zinc-500 hover:text-blue-400 transition-colors">
-                          <ExternalLink size={10} />
-                        </a>
-                      </span>
-                    ) : "—"}
-                  </td>
-                  <td className="py-2 text-zinc-400 text-xs">{new Date(c.createdAt).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+        <div className="mt-4 text-zinc-600 text-xs">
+          Showing {Object.keys(claimHistory.reduce<Record<string,boolean>>((a,c) => ({...a,[c.claimBatchId]:true}),{})).length} batches · {claimHistory.length} total rows
         </div>
       </div>
     </div>
