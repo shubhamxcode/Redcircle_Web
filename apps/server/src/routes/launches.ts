@@ -114,8 +114,11 @@ Respond with valid JSON only, no markdown:
       symbol: String(parsed.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8),
     });
   } catch (err) {
-    console.error("Gemini suggest-name error:", err);
-    res.status(500).json({ error: "Failed to generate suggestion" });
+    const msg = err instanceof Error ? err.message : String(err);
+    const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED");
+    console.error("Gemini suggest-name error:", isQuota ? "quota exceeded" : msg);
+    // Return 200 with null so the frontend falls back to manual input gracefully
+    res.json({ name: null, symbol: null, error: isQuota ? "quota" : "unavailable" });
   }
 });
 

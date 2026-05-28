@@ -94,46 +94,15 @@ export default function LaunchPanel() {
   const [launchId, setLaunchId]     = useState<string | null>(null);
   const [mintAddress, setMintAddress] = useState<string | null>(null);
   const [rocketGone, setRocketGone] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
+
 
   const activeStage = getActiveStage(step);
 
-  // AI-generated name + symbol from post context
+  // Default name + symbol from Reddit post context (Gemini suggest-name commented out)
   useEffect(() => {
     if (!postPreview) return;
-    let cancelled = false;
-
-    const suggest = async () => {
-      setSuggesting(true);
-      try {
-        const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/api/launches/suggest-name`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title:     postPreview.title,
-            subreddit: postPreview.subreddit,
-            content:   postPreview.content,
-          }),
-        });
-        const data = await res.json() as { name?: string; symbol?: string };
-        if (!cancelled && data.name && data.symbol) {
-          setTokenName(data.name);
-          setTokenSymbol(data.symbol);
-        }
-      } catch {
-        // Fall back to naive fill if AI fails
-        if (!cancelled) {
-          setTokenName(postPreview.title.split(" ").slice(0, 3).join(" ").slice(0, 32));
-          setTokenSymbol(postPreview.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
-        }
-      } finally {
-        if (!cancelled) setSuggesting(false);
-      }
-    };
-
-    suggest();
-    return () => { cancelled = true; };
+    setTokenName(postPreview.title.split(" ").slice(0, 3).join(" ").slice(0, 32));
+    setTokenSymbol(postPreview.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
   }, [postPreview]);
 
   // Poll for confirmation
@@ -498,25 +467,18 @@ export default function LaunchPanel() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <SectionLabel n={2} text="Token Details" />
-                          {suggesting && (
-                            <span className="flex items-center gap-1 text-[9px] font-mono text-[#00FFD1]/60">
-                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> AI generating…
-                            </span>
-                          )}
                         </div>
                         <TerminalInput
                           value={tokenName}
                           onChange={(v) => setTokenName(v.slice(0, 32))}
-                          placeholder={suggesting ? "Generating name…" : "Token name"}
+                          placeholder="Token name"
                           mono={false}
-                          disabled={suggesting}
                         />
                         <TerminalInput
                           value={tokenSymbol}
                           onChange={(v) => setTokenSymbol(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
-                          placeholder={suggesting ? "…" : "SYMBOL"}
+                          placeholder="SYMBOL"
                           mono
-                          disabled={suggesting}
                         />
                         <textarea
                           value={description}

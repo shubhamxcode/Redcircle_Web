@@ -40,8 +40,8 @@ export default function Navbar() {
             <span className="hidden xs:inline sm:inline">Redcircle</span>
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-6 flex-1 justify-center">
+          {/* Desktop nav — absolutely centered so it stays centered regardless of side content width */}
+          <nav className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2">
             {navLinks.map((link) => (
               <Link
                 key={link.to}

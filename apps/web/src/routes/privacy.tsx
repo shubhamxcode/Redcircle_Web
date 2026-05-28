@@ -74,7 +74,8 @@ function PrivacyPolicy() {
               <ul className="list-disc list-inside space-y-2 ml-4 mt-4">
                 <li><strong>Reddit:</strong> When you authorize us to access your Reddit account</li>
                 <li><strong>Blockchain Networks:</strong> Transaction data is publicly recorded on the Solana blockchain</li>
-                <li><strong>Service Providers:</strong> Third-party services that help us operate our platform</li>
+                <li><strong>Orynth:</strong> Our token launch infrastructure partner (orynth.dev), which processes all Solana token launches and receives transaction data required to execute on-chain</li>
+                <li><strong>Service Providers:</strong> Other third-party services that help us operate our platform</li>
                 <li><strong>Legal Authorities:</strong> When required by law or to protect our rights</li>
               </ul>
             </section>
@@ -138,13 +139,13 @@ function PrivacyPolicy() {
               </p>
               <div className="mt-4 p-6 bg-white/5 rounded-lg border border-white/10">
                 <p className="font-medium">Email: privacy@redcircle.lol</p>
-                <p className="mt-2">GitHub: <a href="https://github.com/adityaslyf" className="text-blue-400 hover:underline">@adityaslyf</a></p>
+                <p className="mt-2">GitHub: <a href="https://github.com/redcircle-lol" className="text-blue-400 hover:underline">@redcircle-lol</a></p>
               </div>
             </section>
           </div>
 
           <div className="mt-12 pt-8 border-t border-white/10">
-            <a href="/" className="text-blue-400 hover:underline">← Back to Home</a>
+            <a href="/home" className="text-blue-400 hover:underline">← Back to Home</a>
           </div>
         </motion.div>
       </div>

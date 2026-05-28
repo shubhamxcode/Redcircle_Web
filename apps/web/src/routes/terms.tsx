@@ -29,8 +29,9 @@ function TermsOfService() {
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4 font-satoshi">2. Description of Service</h2>
               <p>
-                RedCircle is a Web3 platform that tokenizes viral Reddit posts on the Solana blockchain. 
+                RedCircle is a Web3 platform that tokenizes viral Reddit posts on the Solana blockchain.
                 The Platform allows users to create, trade, and manage tokens representing Reddit content.
+                Token launches are processed through Orynth (orynth.dev), our third-party infrastructure partner.
               </p>
             </section>
 
@@ -111,10 +112,14 @@ function TermsOfService() {
             <section>
               <h2 className="text-2xl font-semibold text-white mb-4 font-satoshi">7. Fees</h2>
               <p>
-                The Platform may charge fees for certain transactions, including token creation and trading. 
-                All fees will be clearly disclosed before you complete a transaction. You are also responsible for 
-                any blockchain network fees (gas fees) associated with your transactions.
+                The Platform charges the following fees, which are disclosed before you complete a transaction:
               </p>
+              <ul className="list-disc list-inside space-y-2 ml-4 mt-4">
+                <li><strong>Launch cost:</strong> approximately 0.05 SOL per token launch, payable by the launcher to cover Solana transaction and upload fees</li>
+                <li><strong>Trading fee:</strong> 2.5% of each trade, split between Orynth/Meteora (1.16%) and the partner/creator bucket (1.34%)</li>
+                <li><strong>Network fees:</strong> standard Solana transaction fees apply to all on-chain actions</li>
+              </ul>
+              <p className="mt-4">Fee amounts may change. The current quote is always shown before you confirm a launch.</p>
             </section>
 
             <section>
@@ -203,13 +208,13 @@ function TermsOfService() {
               </p>
               <div className="mt-4 p-6 bg-white/5 rounded-lg border border-white/10">
                 <p className="font-medium">Email: legal@redcircle.lol</p>
-                <p className="mt-2">GitHub: <a href="https://github.com/adityaslyf" className="text-blue-400 hover:underline">@adityaslyf</a></p>
+                <p className="mt-2">GitHub: <a href="https://github.com/redcircle-lol" className="text-blue-400 hover:underline">@redcircle-lol</a></p>
               </div>
             </section>
           </div>
 
           <div className="mt-12 pt-8 border-t border-white/10">
-            <a href="/" className="text-blue-400 hover:underline">← Back to Home</a>
+            <a href="/home" className="text-blue-400 hover:underline">← Back to Home</a>
           </div>
         </motion.div>
       </div>

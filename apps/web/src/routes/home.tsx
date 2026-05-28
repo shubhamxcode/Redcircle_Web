@@ -64,7 +64,7 @@ function HomeComponent() {
             Powered by Orynth
           </div>
 
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[1.05] mb-4 sm:mb-5">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight leading-[1.05] mb-4 sm:mb-5">
             <span className="text-white">Turn Reddit Posts Into</span>
             <br />
             <span
