@@ -117,7 +117,7 @@ function TokenDetailsPage() {
   const [dex, setDex] = useState<DexPair | null>(null);
   const [dexLoading, setDexLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [creatorEarnings, setCreatorEarnings] = useState<string | null>(null);
+  const [creatorEarnings, setCreatorEarnings] = useState<string>("0");
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
     try {
@@ -136,7 +136,7 @@ function TokenDetailsPage() {
         const { getApiUrl } = await import("@/lib/auth");
         const erRes  = await fetch(`${getApiUrl()}/api/posts/${tokenId}/creator-earnings`);
         const erData = await erRes.json() as { success: boolean; earningsUsdc?: string };
-        if (erData.success && erData.earningsUsdc) setCreatorEarnings(erData.earningsUsdc);
+        if (erData.success && erData.earningsUsdc != null) setCreatorEarnings(erData.earningsUsdc);
       } catch { /* non-critical */ }
 
       if (normalized.tokenMintAddress) {
@@ -300,7 +300,7 @@ function TokenDetailsPage() {
             className="order-1 lg:order-2 space-y-3"
           >
             {/* Creator earnings */}
-            {creatorEarnings !== null && parseFloat(creatorEarnings) >= 0.01 && (
+            {(
               <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
                 <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest mb-1">Creator Earnings</p>
                 <p className="text-xl font-bold text-white">${parseFloat(creatorEarnings).toFixed(2)} <span className="text-xs font-normal text-white/40">USDC</span></p>

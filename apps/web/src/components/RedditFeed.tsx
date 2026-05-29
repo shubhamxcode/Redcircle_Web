@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { RefreshCw, TrendingUp, Clock } from "lucide-react";
+import { RefreshCw, ChevronDown, Check } from "lucide-react";
 import FeedCard, { type FeedPost } from "@/components/FeedCard";
 import SearchBar, { type SearchFilters } from "@/components/SearchBar";
 import { getApiUrl } from "@/lib/auth";
@@ -30,12 +30,96 @@ type BackendPost = {
   holders?: number;
 };
 
-type SortOption = "trending" | "new";
+type SortField   = "totalVolume" | "marketCap" | "currentPrice" | "tokenizedAt";
+type SortOrder   = "desc" | "asc";
+type TimeWindow  = "all" | "1h" | "4h" | "24h" | "7d" | "30d";
 
-const SORT_OPTIONS: { value: SortOption; label: string; icon: typeof TrendingUp }[] = [
-  { value: "trending", label: "Trending", icon: TrendingUp },
-  { value: "new", label: "Latest", icon: Clock },
+const SORT_FIELDS: { value: SortField; label: string }[] = [
+  { value: "totalVolume",  label: "Volume" },
+  { value: "marketCap",    label: "Market Cap" },
+  { value: "currentPrice", label: "Price Chg 24h" },
+  { value: "tokenizedAt",  label: "Creation Time" },
 ];
+const SORT_ORDERS: { value: SortOrder; label: string }[] = [
+  { value: "desc", label: "Descending" },
+  { value: "asc",  label: "Ascending" },
+];
+const TIME_WINDOWS: { value: TimeWindow; label: string }[] = [
+  { value: "all", label: "All Time" },
+  { value: "1h",  label: "1 Hour" },
+  { value: "4h",  label: "4 Hours" },
+  { value: "24h", label: "24 Hours" },
+  { value: "7d",  label: "7 Days" },
+  { value: "30d", label: "30 Days" },
+];
+
+function FilterDropdown<T extends string>({
+  options, value, onChange,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const label = options.find((o) => o.value === value)?.label ?? value;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((p) => !p)}
+        className={cn(
+          "flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-white transition-all min-w-[130px] justify-between",
+          open
+            ? "border-[#b06ef3]/70 bg-[#0d0d14] shadow-[0_0_0_1px_rgba(176,110,243,0.3),0_0_16px_rgba(176,110,243,0.15)]"
+            : "border-[#b06ef3]/30 bg-[#0d0d14] hover:border-[#b06ef3]/60",
+        )}
+      >
+        {label}
+        <ChevronDown className={cn("h-3.5 w-3.5 text-white/50 transition-transform", open && "rotate-180")} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[150px] rounded-xl border border-white/10 bg-[#111118] py-1 shadow-xl"
+          >
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false); }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-4 py-2.5 text-sm transition-colors text-left",
+                  opt.value === value
+                    ? "bg-white/[0.07] text-white font-medium"
+                    : "text-white/60 hover:bg-white/[0.04] hover:text-white",
+                )}
+              >
+                <span className="w-4 flex-shrink-0">
+                  {opt.value === value && <Check className="h-3.5 w-3.5 text-[#b06ef3]" />}
+                </span>
+                {opt.label}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 function transformPost(post: BackendPost): FeedPost {
   return {
@@ -71,21 +155,27 @@ export default function RedditFeed() {
   const [offset, setOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({});
-  const [activeSort, setActiveSort] = useState<SortOption>("trending");
+  const [sortField,  setSortField]  = useState<SortField>("totalVolume");
+  const [sortOrder,  setSortOrder]  = useState<SortOrder>("desc");
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("all");
 
   const fetchPosts = useCallback(
     async (opts: {
       refreshing?: boolean;
       reset?: boolean;
       filters?: SearchFilters;
-      sort?: SortOption;
+      field?: SortField;
+      order?: SortOrder;
+      time?: TimeWindow;
       currentOffset?: number;
     } = {}) => {
       const {
         refreshing = false,
         reset = true,
         filters = searchFilters,
-        sort = activeSort,
+        field = sortField,
+        order = sortOrder,
+        time = timeWindow,
         currentOffset = 0,
       } = opts;
 
@@ -97,20 +187,17 @@ export default function RedditFeed() {
         const useOffset = reset ? 0 : currentOffset;
 
         const hasSearchParams =
-          filters.q ||
-          filters.subreddit ||
-          filters.author ||
-          filters.minPrice != null ||
-          filters.maxPrice != null ||
-          filters.minVolume != null ||
-          filters.minMarketCap != null ||
+          filters.q || filters.subreddit || filters.author ||
+          filters.minPrice != null || filters.maxPrice != null ||
+          filters.minVolume != null || filters.minMarketCap != null ||
           filters.tags;
 
         let url = hasSearchParams
-          ? `${apiUrl}/api/posts/search?sortBy=${sort}&`
-          : `${apiUrl}/api/posts?status=all&sortBy=${sort === "new" ? "tokenizedAt" : "upvotes"}&`;
+          ? `${apiUrl}/api/posts/search?sortBy=${field}&order=${order}&`
+          : `${apiUrl}/api/posts?status=all&sortBy=${field}&order=${order}&`;
 
         url += `limit=20&offset=${useOffset}`;
+        if (time && time !== "all") url += `&since=${time}`;
 
         if (filters.q) url += `&q=${encodeURIComponent(filters.q)}`;
         if (filters.subreddit) url += `&subreddit=${encodeURIComponent(filters.subreddit)}`;
@@ -138,7 +225,7 @@ export default function RedditFeed() {
         setIsRefreshing(false);
       }
     },
-    [searchFilters, activeSort],
+    [searchFilters, sortField, sortOrder, timeWindow],
   );
 
   // Initial load
@@ -147,12 +234,22 @@ export default function RedditFeed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch when sort changes
-  const handleSortChange = (sort: SortOption) => {
-    if (sort === activeSort) return;
-    setActiveSort(sort);
+  const handleFieldChange = (field: SortField) => {
+    setSortField(field);
     setOffset(0);
-    fetchPosts({ reset: true, sort, filters: searchFilters, currentOffset: 0 });
+    fetchPosts({ reset: true, field, order: sortOrder, time: timeWindow, currentOffset: 0 });
+  };
+
+  const handleOrderChange = (order: SortOrder) => {
+    setSortOrder(order);
+    setOffset(0);
+    fetchPosts({ reset: true, field: sortField, order, time: timeWindow, currentOffset: 0 });
+  };
+
+  const handleTimeChange = (time: TimeWindow) => {
+    setTimeWindow(time);
+    setOffset(0);
+    fetchPosts({ reset: true, field: sortField, order: sortOrder, time, currentOffset: 0 });
   };
 
   // Re-fetch when search changes
@@ -160,9 +257,9 @@ export default function RedditFeed() {
     (filters: SearchFilters) => {
       setSearchFilters(filters);
       setOffset(0);
-      fetchPosts({ reset: true, filters, sort: activeSort, currentOffset: 0 });
+      fetchPosts({ reset: true, filters, field: sortField, order: sortOrder, time: timeWindow, currentOffset: 0 });
     },
-    [activeSort, fetchPosts],
+    [sortField, sortOrder, timeWindow, fetchPosts],
   );
 
   const handleRefresh = () => {
@@ -201,24 +298,12 @@ export default function RedditFeed() {
         {/* Search */}
         <SearchBar onSearch={handleSearch} showFilters />
 
-        {/* Sort + Refresh row */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 rounded-xl border border-white/5 bg-neutral-900/60 p-1">
-            {SORT_OPTIONS.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                onClick={() => handleSortChange(value)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all duration-200",
-                  activeSort === value
-                    ? "bg-white/10 text-white shadow-sm"
-                    : "text-white/45 hover:text-white/80",
-                )}
-              >
-                <Icon className="h-3 w-3" />
-                {label}
-              </button>
-            ))}
+        {/* Filter + Refresh row */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <FilterDropdown options={SORT_FIELDS}   value={sortField}  onChange={handleFieldChange} />
+            <FilterDropdown options={SORT_ORDERS}   value={sortOrder}  onChange={handleOrderChange} />
+            <FilterDropdown options={TIME_WINDOWS}  value={timeWindow} onChange={handleTimeChange} />
           </div>
 
           <button

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, and, gte, lte, like, ilike, or, sql } from "drizzle-orm";
+import { eq, desc, asc, and, gte, lte, like, ilike, or, sql } from "drizzle-orm";
 import { getEarnings } from "../services/orynth.service";
 
 const { posts, launches } = schema;
@@ -264,19 +264,23 @@ router.get("/search", async (req, res) => {
  */
 router.get("/", async (req, res) => {
   try {
-    const { 
-      status = "active", 
-      limit = 50, 
+    const {
+      status = "active",
+      limit = 50,
       offset = 0,
       subreddit,
-      sortBy = "tokenizedAt" // tokenizedAt, upvotes, marketCap, totalVolume
+      sortBy = "tokenizedAt", // tokenizedAt, upvotes, marketCap, totalVolume, currentPrice
+      order = "desc",         // asc | desc
+      since,                  // "1h" | "4h" | "24h" | "7d" | "30d"
     } = req.query;
 
-    console.log(`📋 Fetching posts: status=${status}, limit=${limit}, offset=${offset}`);
+    console.log(`📋 Fetching posts: status=${status}, limit=${limit}, offset=${offset}, sortBy=${sortBy}, order=${order}, since=${since}`);
+
+    const dir = (col: any) => order === "asc" ? asc(col) : desc(col);
 
     // Build query based on filters
     const baseQuery = db.select().from(posts);
-    
+
     // Apply filters
     const conditions = [];
     if (status && status !== "all") {
@@ -286,25 +290,38 @@ router.get("/", async (req, res) => {
       conditions.push(ilike(posts.subreddit, `%${subreddit}%`));
     }
 
+    // Time window filter on tokenizedAt
+    if (since && typeof since === "string") {
+      const units: Record<string, number> = { "1h": 1, "4h": 4, "24h": 24, "7d": 168, "30d": 720 };
+      const hours = units[since];
+      if (hours) {
+        const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+        conditions.push(gte(posts.tokenizedAt, cutoff));
+      }
+    }
+
     // Determine sort column
     let orderColumn;
     switch (sortBy) {
       case "upvotes":
-        orderColumn = desc(posts.upvotes);
+        orderColumn = dir(posts.upvotes);
         break;
       case "marketCap":
-        orderColumn = desc(posts.marketCap);
+        orderColumn = dir(posts.marketCap);
         break;
       case "totalVolume":
-        orderColumn = desc(posts.totalVolume);
+        orderColumn = dir(posts.totalVolume);
+        break;
+      case "currentPrice":
+        orderColumn = dir(posts.currentPrice);
         break;
       default:
-        orderColumn = desc(posts.tokenizedAt);
+        orderColumn = dir(posts.tokenizedAt);
     }
 
     // Execute query with all filters
     const postsList = await (conditions.length > 0
-      ? baseQuery.where(conditions[0]).orderBy(orderColumn)
+      ? baseQuery.where(and(...conditions)).orderBy(orderColumn)
       : baseQuery.orderBy(orderColumn)
     )
       .limit(parseInt(limit as string))

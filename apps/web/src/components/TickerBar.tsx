@@ -52,8 +52,8 @@ export default function TickerBar() {
             symbol:      p.tokenSymbol,
             name:        p.title,
             mintAddress: p.tokenMintAddress,
-            mcap:        p.marketCap ? parseFloat(p.marketCap) : undefined,
-            price:       p.currentPrice ? parseFloat(p.currentPrice) : undefined,
+            mcap:        undefined,
+            price:       undefined,
           }));
         setTokens(posts);
 
@@ -66,7 +66,7 @@ export default function TickerBar() {
               const d   = await res.json() as { pair?: any };
               if (d.pair) {
                 tok.change = d.pair.priceChange?.h24 ?? undefined;
-                tok.mcap   = d.pair.fdv ?? d.pair.marketCap ?? tok.mcap;
+                tok.mcap   = d.pair.fdv ?? d.pair.marketCap ?? undefined;
               }
             } catch { /* keep stored data */ }
           })
