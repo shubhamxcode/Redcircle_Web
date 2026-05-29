@@ -101,35 +101,6 @@ export function AnimatedFooter() {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Marquee highlights */}
-        <div className="relative mb-10 overflow-hidden">
-          <style>{`@keyframes rc-scroll-x { from { transform: translateX(0); } to { transform: translateX(-50%); } }`}</style>
-          <div className="pointer-events-none [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
-            <div
-              className="whitespace-nowrap flex gap-12"
-              style={{ width: "200%", animation: "rc-scroll-x 24s linear infinite" }}
-            >
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="flex gap-12 text-neutral-500">
-                  {[
-                    "Web3 Social",
-                    "Solana Blockchain",
-                    "Reddit Integration",
-                    "Token Trading",
-                    "Decentralized Finance",
-                    "Content Monetization",
-                    "Community Rewards",
-                  ].map((label) => (
-                    <span key={`${i}-${label}`} className="tracking-wide text-sm">
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* Links */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
           <MotionCol title="Platform" links={[

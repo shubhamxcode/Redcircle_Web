@@ -479,30 +479,9 @@ export default function LaunchPanel() {
 
                     {/* Right */}
                     <div className="space-y-5">
-                      {/* Fee model */}
-                      <div>
-                        <SectionLabel n={3} text="Fee Model" />
-                        <div className="bg-black/60 border border-white/[0.05] rounded-xl p-3.5 mt-2 space-y-1.5 font-mono text-[10px]">
-                          {quote?.launchCost?.requiredSol != null && (
-                            <div className="flex justify-between text-white/60 border-b border-white/[0.05] pb-1.5 mb-1.5">
-                              <span>launch cost</span>
-                              <span className="text-[#E8431C]">~{Math.ceil(quote.launchCost.requiredSol * 1000) / 1000} SOL</span>
-                            </div>
-                          )}
-                          <FeeRow label="total trading fee" value="2.50%" />
-                          <FeeRow label="  orynth + meteora" value="1.16%" dim />
-                          <FeeRow label="  partner (redcircle)" value="1.34%" highlight="orange" />
-                          <FeeRow label="    creator payout" value="0.67%" dim />
-                          <FeeRow label="    platform" value="0.67%" dim />
-                          <p className="text-white/20 pt-1.5 border-t border-white/[0.05] leading-relaxed">
-                            you pay launch costs · trading fees go to creator
-                          </p>
-                        </div>
-                      </div>
-
                       {/* Wallet */}
                       <div>
-                        <SectionLabel n={4} text="Payer Wallet" />
+                        <SectionLabel n={3} text="Payer Wallet" />
                         <div className="mt-2 flex flex-col gap-2">
                           <WalletMultiButton className="!rounded-lg !h-10 !text-sm !w-full !justify-center !font-mono" />
                           {connected && publicKey && (
@@ -597,13 +576,3 @@ function TerminalInput({ value, onChange, placeholder, mono, disabled }: {
   );
 }
 
-function FeeRow({ label, value, dim, highlight }: {
-  label: string; value: string; dim?: boolean; highlight?: "orange";
-}) {
-  return (
-    <div className="flex justify-between">
-      <span className={dim ? "text-white/20" : "text-white/40"}>{label}</span>
-      <span className={highlight === "orange" ? "text-[#E8431C]/80" : dim ? "text-white/20" : "text-white/50"}>{value}</span>
-    </div>
-  );
-}
