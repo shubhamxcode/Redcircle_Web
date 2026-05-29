@@ -78,7 +78,7 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
     return () => { cancelled = true; };
   }, [post.tokenMintAddress]);
 
-  const mcapDisplay = liveMcap ?? (post.marketCap && post.marketCap > 0 ? formatUsd(post.marketCap) : "—");
+  const mcapDisplay = liveMcap ?? "—";
   const hasMcap = mcapDisplay !== "—";
   const initial = (post.subreddit ?? "R").slice(0, 1).toUpperCase();
   const isNew = Date.now() - new Date(post.createdAt).getTime() < 24 * 60 * 60 * 1000;

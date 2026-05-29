@@ -117,6 +117,7 @@ function TokenDetailsPage() {
   const [dex, setDex] = useState<DexPair | null>(null);
   const [dexLoading, setDexLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [creatorEarnings, setCreatorEarnings] = useState<string | null>(null);
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
     try {
@@ -129,6 +130,14 @@ function TokenDetailsPage() {
 
       const normalized = normalizePost(data.post);
       setPost(normalized);
+
+      // Fetch creator earnings
+      try {
+        const { getApiUrl } = await import("@/lib/auth");
+        const erRes  = await fetch(`${getApiUrl()}/api/posts/${tokenId}/creator-earnings`);
+        const erData = await erRes.json() as { success: boolean; earningsUsdc?: string };
+        if (erData.success && erData.earningsUsdc) setCreatorEarnings(erData.earningsUsdc);
+      } catch { /* non-critical */ }
 
       if (normalized.tokenMintAddress) {
         setDexLoading(true);
@@ -155,7 +164,7 @@ function TokenDetailsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center pt-24">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-white" />
           <p className="text-sm text-white/50">Loading token...</p>
@@ -166,7 +175,7 @@ function TokenDetailsPage() {
 
   if (error || !post) {
     return (
-      <div className="flex min-h-screen items-center justify-center pt-24 px-6">
+      <div className="flex min-h-screen items-center justify-center px-6">
         <div className="text-center">
           <p className="text-xl text-red-400">⚠️ {error || "Token not found"}</p>
           <Button onClick={() => navigate({ to: "/" })} className="mt-6" variant="outline">
@@ -177,29 +186,14 @@ function TokenDetailsPage() {
     );
   }
 
-  const priceChange = dex
-    ? (dex.priceChange.h24 ?? 0)
-    : post.tokenPrice && post.initialPrice
-      ? (post.tokenPrice - parseFloat(post.initialPrice)) / parseFloat(post.initialPrice) * 100
-      : 0;
-  const isPositive = priceChange >= 0;
+  // Only show price change when DexScreener has real h24 data
+  const priceChange = dex?.priceChange.h24 ?? null;
+  const isPositive = (priceChange ?? 0) >= 0;
   const isOnChain = !!post.tokenMintAddress;
 
   return (
     <div className="min-h-screen pb-16 bg-black">
       <div className="mx-auto w-full max-w-7xl px-3 sm:px-4 lg:px-6">
-
-        {/* ── Breadcrumb ── */}
-        <div className="flex items-center gap-2 py-3">
-          <button
-            onClick={() => navigate({ to: "/" })}
-            className="flex items-center gap-1.5 text-xs sm:text-sm text-white/50 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Feed
-          </button>
-          <span className="text-white/20">/</span>
-          <span className="text-xs sm:text-sm text-white/70 font-medium truncate max-w-[120px] sm:max-w-none">{post.tokenSymbol}</span>
-        </div>
 
         {/* ── Token header ── */}
         <motion.div
@@ -238,10 +232,12 @@ function TokenDetailsPage() {
                 </span>
                 {dexLoading && <RefreshCw className="h-3 w-3 animate-spin text-white/30" />}
               </div>
-              <div className={cn("flex items-center gap-1 text-xs sm:text-sm font-semibold", isPositive ? "text-green-400" : "text-red-400")}>
-                {isPositive ? <TrendingUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> : <TrendingDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
-                {isPositive ? "+" : ""}{priceChange.toFixed(2)}% (24h)
-              </div>
+              {priceChange !== null && (
+                <div className={cn("flex items-center gap-1 text-xs sm:text-sm font-semibold", isPositive ? "text-green-400" : "text-red-400")}>
+                  {isPositive ? <TrendingUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> : <TrendingDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                  {isPositive ? "+" : ""}{priceChange.toFixed(2)}% (24h)
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
@@ -303,6 +299,14 @@ function TokenDetailsPage() {
             transition={{ delay: 0.2 }}
             className="order-1 lg:order-2 space-y-3"
           >
+            {/* Creator earnings */}
+            {creatorEarnings !== null && parseFloat(creatorEarnings) >= 0.01 && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
+                <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest mb-1">Creator Earnings</p>
+                <p className="text-xl font-bold text-white">${parseFloat(creatorEarnings).toFixed(2)} <span className="text-xs font-normal text-white/40">USDC</span></p>
+              </div>
+            )}
+
             {/* Trade */}
             {isOnChain ? (
               <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
@@ -311,7 +315,7 @@ function TokenDetailsPage() {
                   href={`https://dexscreener.com/solana/${post.tokenMintAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-3 text-sm font-bold text-black hover:bg-green-400 transition-colors"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-2.5 text-sm font-bold text-black hover:bg-green-400 transition-colors"
                 >
                   <ArrowRightLeft className="h-4 w-4" />
                   Trade on DexScreener
@@ -366,7 +370,7 @@ function TokenDetailsPage() {
             {/* Original post */}
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2.5">
               <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Source Post</p>
-              <p className="text-sm font-medium text-white leading-snug line-clamp-3">{post.title}</p>
+              <p className="text-sm font-medium text-white leading-snug line-clamp-2">{post.title}</p>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/40">
                 <span>r/{post.subreddit}</span>
                 <span>·</span>

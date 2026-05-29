@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { getApiUrl } from "@/lib/auth";
 import { Copy, Check, RefreshCw, Zap, ExternalLink, RotateCcw } from "lucide-react";
 
@@ -50,11 +50,9 @@ interface ClaimRow {
   createdAt: string;
 }
 
-const ADMIN_KEY_STORAGE = "rc_admin_secret";
-const getAdminSecret = () => localStorage.getItem(ADMIN_KEY_STORAGE) ?? "";
-const adminHeaders = () => ({
+const adminHeaders = (secret: string) => ({
   "Content-Type": "application/json",
-  "x-admin-secret": getAdminSecret(),
+  "x-admin-secret": secret,
 });
 
 function shortAddr(addr: string) {
@@ -83,7 +81,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AdminPage() {
-  const [secret, setSecret] = useState(getAdminSecret);
+  const [secret, setSecret] = useState(() => {
+    // Clear any previously persisted secret from old localStorage-based auth
+    localStorage.removeItem("rc_admin_secret");
+    return "";
+  });
   const [authed, setAuthed] = useState(false);
   const [launches, setLaunches] = useState<Launch[]>([]);
   const [earningsMap, setEarningsMap] = useState<Record<string, PoolEarning>>({});
@@ -98,16 +100,15 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
 
   const apiUrl = getApiUrl();
-  const didAutoAuth = useRef(false);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (s = secret) => {
     setLoading(true);
     setError("");
     try {
       const [launchRes, earningsRes, claimsRes] = await Promise.all([
-        fetch(`${apiUrl}/api/admin/launches`, { headers: adminHeaders() }),
-        fetch(`${apiUrl}/api/admin/earnings`, { headers: adminHeaders() }),
-        fetch(`${apiUrl}/api/admin/claims`, { headers: adminHeaders() }),
+        fetch(`${apiUrl}/api/admin/launches`, { headers: adminHeaders(s) }),
+        fetch(`${apiUrl}/api/admin/earnings`, { headers: adminHeaders(s) }),
+        fetch(`${apiUrl}/api/admin/claims`, { headers: adminHeaders(s) }),
       ]);
 
       if (launchRes.status === 401) { setAuthed(false); setError("Invalid admin secret"); return; }
@@ -137,26 +138,19 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiUrl]);
+  }, [apiUrl, secret]);
 
-  // Auto-authenticate on mount if a secret is already saved
-  useEffect(() => {
-    if (didAutoAuth.current) return;
-    didAutoAuth.current = true;
-    if (getAdminSecret()) fetchAll();
-  }, [fetchAll]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem(ADMIN_KEY_STORAGE, secret);
-    await fetchAll();
+    await fetchAll(secret);
   };
 
   const handleSync = async () => {
     setSyncing(true);
     setError("");
     try {
-      const res = await fetch(`${apiUrl}/api/admin/sync`, { method: "POST", headers: adminHeaders() });
+      const res = await fetch(`${apiUrl}/api/admin/sync`, { method: "POST", headers: adminHeaders(secret) });
       const data = await res.json();
       if (!data.success) throw new Error(data.error ?? "Sync failed");
       await fetchAll();
@@ -173,7 +167,7 @@ export default function AdminPage() {
     setError("");
     try {
       const res = await fetch(`${apiUrl}/api/admin/claims`, {
-        method: "POST", headers: adminHeaders(), body: JSON.stringify({}),
+        method: "POST", headers: adminHeaders(secret), body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error ?? "Claim failed");

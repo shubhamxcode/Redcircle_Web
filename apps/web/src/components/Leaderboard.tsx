@@ -2,20 +2,16 @@ import { motion } from "motion/react";
 import { useState, useEffect } from "react";
 import { getApiUrl } from "@/lib/auth";
 
-type Category = "author" | "curator";
-
 type Entry = {
   rank: number;
   id: string;
   user: string;
   avatar?: string;
-  pnl: number; // percentage
-  volume: number; // SOL
-  category: Category;
+  pnl: number;    // creator USDC earnings (50% of partner fees)
+  volume: number; // total trading volume in SOL
 };
 
-export default function Leaderboard({ sideFilters = false }: { sideFilters?: boolean }) {
-  const [category, setCategory] = useState<Category>("author");
+export default function Leaderboard() {
   const [data, setData] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +23,7 @@ export default function Leaderboard({ sideFilters = false }: { sideFilters?: boo
         setError(null);
 
         const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/api/leaderboard?category=${category}&limit=10`);
+        const response = await fetch(`${apiUrl}/api/leaderboard?category=author&limit=10`);
         const result = await response.json();
 
         if (result.success) {
@@ -45,7 +41,7 @@ export default function Leaderboard({ sideFilters = false }: { sideFilters?: boo
     };
 
     fetchLeaderboard();
-  }, [category]);
+  }, []);
 
   return (
     <section className="w-full">
@@ -59,69 +55,18 @@ export default function Leaderboard({ sideFilters = false }: { sideFilters?: boo
         >
           Leaderboard
         </motion.h2>
-        {!sideFilters && (
-          <div className="hidden items-center gap-2 sm:flex">
-            <button
-              onClick={() => setCategory("author")}
-              className={
-                "rounded-lg border px-3 py-1 text-sm transition-colors " +
-                (category === "author"
-                  ? "border-white/20 bg-white/15 text-white"
-                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10")
-              }
-            >
-              Author
-            </button>
-            <button
-              onClick={() => setCategory("curator")}
-              className={
-                "rounded-lg border px-3 py-1 text-sm transition-colors " +
-                (category === "curator"
-                  ? "border-white/20 bg-white/15 text-white"
-                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10")
-              }
-            >
-              Curator
-            </button>
-          </div>
-        )}
+        <span className="rounded-lg border border-white/20 bg-white/15 px-3 py-1 text-sm text-white">
+          Creator
+        </span>
       </div>
-
-      {sideFilters && (
-        <aside className="fixed right-6 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-2 sm:flex">
-          <h3 className="mb-2 pl-1 text-xs uppercase tracking-wider text-white/50">Filter</h3>
-          <button
-            onClick={() => setCategory("author")}
-            className={
-              "rounded-xl border px-3 py-2 text-sm transition-colors " +
-              (category === "author"
-                ? "border-white/20 bg-white/15 text-white"
-                : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10")
-            }
-          >
-            Author
-          </button>
-          <button
-            onClick={() => setCategory("curator")}
-            className={
-              "rounded-xl border px-3 py-2 text-sm transition-colors " +
-              (category === "curator"
-                ? "border-white/20 bg-white/15 text-white"
-                : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10")
-            }
-          >
-            Curator
-          </button>
-        </aside>
-      )}
 
       <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-white/10">
         <div className="grid grid-cols-12 bg-white/[0.04] px-4 py-2 text-xs text-white/60">
-          <div className="col-span-6">User</div>
-          <div className="col-span-3 text-right">PnL</div>
-          <div className="col-span-3 text-right">Volume</div>
+          <div className="col-span-6">Creator</div>
+          <div className="col-span-3 text-right">Earned (USDC)</div>
+          <div className="col-span-3 text-right">Volume (SOL)</div>
         </div>
-        
+
         {loading ? (
           <div className="bg-black/60 px-4 py-12 text-center backdrop-blur">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-white/20 border-t-white"></div>
@@ -134,22 +79,27 @@ export default function Leaderboard({ sideFilters = false }: { sideFilters?: boo
         ) : data.length === 0 ? (
           <div className="bg-black/60 px-4 py-12 text-center backdrop-blur">
             <p className="text-sm text-white/60">No data available yet</p>
-            <p className="mt-1 text-xs text-white/40">
-              {category === "author" ? "No tokenized posts yet" : "No trades yet"}
-            </p>
+            <p className="mt-1 text-xs text-white/40">No tokenized posts yet</p>
           </div>
         ) : (
           <ul className="divide-y divide-white/10">
             {data.map((e) => (
               <li key={e.id} className="grid grid-cols-12 items-center bg-black/60 px-4 py-3 backdrop-blur">
-                <div className="col-span-6 truncate text-white/90">
-                  <span className="mr-3 inline-block w-5 text-white/40">{e.rank}</span>
-                  u/{e.user}
+                <div className="col-span-6 flex items-center gap-3 min-w-0">
+                  <span className="w-5 shrink-0 text-white/40 text-sm">{e.rank}</span>
+                  {e.avatar ? (
+                    <img src={e.avatar} alt={e.user} className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/10" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-white/10 shrink-0 flex items-center justify-center text-[10px] text-white/40 font-bold">
+                      {e.user[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <span className="truncate text-white/90 text-sm">u/{e.user}</span>
                 </div>
-                <div className={`col-span-3 text-right font-medium ${e.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {e.pnl >= 0 ? '+' : ''}{e.pnl.toFixed(1)}%
+                <div className="col-span-3 text-right font-medium text-emerald-400">
+                  ${e.pnl.toFixed(2)}
                 </div>
-                <div className="col-span-3 text-right text-white/70">{Intl.NumberFormat().format(e.volume)} SOL</div>
+                <div className="col-span-3 text-right text-white/70">{e.volume.toFixed(2)} SOL</div>
               </li>
             ))}
           </ul>
@@ -158,5 +108,3 @@ export default function Leaderboard({ sideFilters = false }: { sideFilters?: boo
     </section>
   );
 }
-
-

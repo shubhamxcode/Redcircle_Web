@@ -49,7 +49,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 }) => {
   // Adjust for navbar height (assume 64px)
   return (
-    <div className="min-h-[calc(100vh-64px)] pt-16 flex flex-col md:flex-row font-geist w-[100vw]">
+    <div className="min-h-[calc(100vh-96px)] flex flex-col md:flex-row font-geist w-[100vw]">
       {/* Left column: sign-in form */}
       <section className="flex-1 flex items-center justify-center p-8 relative z-10">
         <div className="w-full max-w-md relative z-10">

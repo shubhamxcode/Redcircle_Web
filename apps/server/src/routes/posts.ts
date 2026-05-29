@@ -3,8 +3,9 @@ import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
 import { eq, desc, and, gte, lte, like, ilike, or, sql } from "drizzle-orm";
+import { getEarnings } from "../services/orynth.service";
 
-const { posts } = schema;
+const { posts, launches } = schema;
 const router = Router();
 
 /**
@@ -358,6 +359,63 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ 
       error: "Failed to fetch post" 
     });
+  }
+});
+
+/**
+ * GET /api/posts/:id/creator-earnings
+ * Returns the creator's USDC earnings for the token associated with this post.
+ * Creator share = 50% of the partner bucket (67/134 bps).
+ */
+router.get("/:id/creator-earnings", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the confirmed launch for this post (by postId or redditPostId)
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) return res.status(404).json({ success: false, error: "Post not found" });
+
+    // Look up the launch by mint address or reddit post id
+    const [launch] = await db
+      .select({
+        poolAddress:   launches.poolAddress,
+        creatorFeeBps: launches.creatorFeeBps,
+        partnerFeeBps: launches.partnerFeeBps,
+      })
+      .from(launches)
+      .where(
+        and(
+          eq(launches.status, "confirmed"),
+          eq(launches.sourceId, post.redditPostId),
+        ),
+      )
+      .limit(1);
+
+    if (!launch?.poolAddress) {
+      return res.json({ success: true, earningsUsdc: "0", poolAddress: null });
+    }
+
+    const earningsRes = await getEarnings([launch.poolAddress]);
+    const earning     = earningsRes.earnings?.[0];
+
+    if (!earning) {
+      return res.json({ success: true, earningsUsdc: "0", poolAddress: launch.poolAddress });
+    }
+
+    const totalUsdc  = parseFloat(earning.claimedUsdc ?? "0") + parseFloat(earning.claimableUsdc ?? "0");
+    const creatorBps = launch.creatorFeeBps ?? 67;
+    const partnerBps = launch.partnerFeeBps ?? 134;
+    const share      = partnerBps > 0 ? creatorBps / partnerBps : 0.5;
+    const creatorUsdc = totalUsdc * share;
+
+    return res.json({
+      success:      true,
+      earningsUsdc: creatorUsdc.toFixed(4),
+      poolAddress:  launch.poolAddress,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching creator earnings:", err);
+    res.status(500).json({ success: false, error: "Failed to fetch creator earnings" });
   }
 });
 

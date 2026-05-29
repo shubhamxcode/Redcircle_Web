@@ -8,7 +8,9 @@ import {
 	HeadContent,
 	Outlet,
 	createRootRouteWithContext,
+	useRouterState,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 import "../index.css";
 import { Buffer } from 'buffer';
 
@@ -40,6 +42,12 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	}),
 });
 
+function ScrollToTop() {
+	const pathname = useRouterState({ select: (s) => s.location.pathname });
+	useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+	return null;
+}
+
 function RootComponent() {
 	return (
 		<>
@@ -52,6 +60,7 @@ function RootComponent() {
 			>
 				<WalletContextProvider>
 					<AuthProvider>
+						<ScrollToTop />
 						<Navbar />
 						<TickerBar />
 						<div className="pt-24">
