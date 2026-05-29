@@ -1,9 +1,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useNavigate } from "@tanstack/react-router";
 import { Transaction } from "@solana/web3.js";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import {
@@ -79,9 +77,7 @@ const PARTICLES = [
 ];
 
 export default function LaunchPanel() {
-  const { user } = useAuth();
   const { publicKey, signTransaction, connected } = useWallet();
-  const navigate = useNavigate();
 
   const [url, setUrl]               = useState("");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
@@ -151,36 +147,27 @@ export default function LaunchPanel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch Reddit post");
-      setPostPreview(data.post);
+      const post = data.post;
+      setPostPreview(post);
       setStep("previewing");
+
+      // Auto-fetch quote silently so launch cost shows immediately
+      const name   = post.title.split(" ").slice(0, 3).join(" ").slice(0, 32);
+      const symbol = post.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+      try {
+        const qRes  = await fetch(`${apiUrl}/api/launches/quote?tokenName=${encodeURIComponent(name)}&tokenSymbol=${encodeURIComponent(symbol)}`);
+        const qData = await qRes.json();
+        setQuote(qData.quote ?? {});
+      } catch { setQuote({}); }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch post");
       setStep("idle");
     }
   };
 
-  const handleGetQuote = async () => {
-    if (!tokenName || !tokenSymbol) return;
-    setStep("quoting");
-    try {
-      const apiUrl = getApiUrl();
-      const res  = await fetch(`${apiUrl}/api/launches/quote?tokenName=${encodeURIComponent(tokenName)}&tokenSymbol=${encodeURIComponent(tokenSymbol)}`);
-      const data = await res.json();
-      setQuote(data.quote ?? {});
-      setStep("previewing");
-    } catch {
-      setQuote({});
-      setStep("previewing");
-    }
-  };
-
   const handleLaunch = async () => {
     if (!postPreview || !connected || !publicKey || !signTransaction) {
       setError("Connect your wallet first");
-      return;
-    }
-    if (!user?.id) {
-      navigate({ to: "/signin", search: { redirect: "/launch" } });
       return;
     }
     setError("");
@@ -487,14 +474,6 @@ export default function LaunchPanel() {
                           rows={2}
                           className="w-full bg-black/60 border border-white/[0.07] rounded-lg px-3 py-2.5 text-white/80 text-sm placeholder:text-white/15 focus:outline-none focus:border-[#E8431C]/30 focus:shadow-[0_0_0_1px_rgba(232,67,28,0.1)] transition-all resize-none font-mono text-xs"
                         />
-                        <button
-                          onClick={handleGetQuote}
-                          disabled={!tokenName || !tokenSymbol || isBusy}
-                          className="w-full py-2 rounded-lg border border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/15 text-white/40 hover:text-white/70 text-[10px] font-mono uppercase tracking-widest transition-all disabled:opacity-30 flex items-center justify-center gap-2"
-                        >
-                          {step === "quoting" ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                          {step === "quoting" ? "Fetching quote…" : "Get Launch Quote"}
-                        </button>
                       </div>
                     </div>
 
@@ -547,7 +526,11 @@ export default function LaunchPanel() {
                     </button>
                     <button
                       onClick={handleLaunch}
-                      disabled={isBusy || !connected || !tokenName || !tokenSymbol || !user}
+                      disabled={isBusy || !connected || !tokenName || !tokenSymbol}
+                      title={
+                        !connected ? "Connect your Solana wallet" :
+                        !tokenName || !tokenSymbol ? "Fill in token details" : undefined
+                      }
                       className={cn(
                         "px-8 py-2.5 rounded-lg font-mono font-bold text-sm transition-all flex items-center justify-center gap-2",
                         "bg-[#E8431C] hover:bg-[#FF5535] text-black",
