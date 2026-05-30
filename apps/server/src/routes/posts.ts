@@ -111,8 +111,6 @@ Reply with ONLY a JSON object, no markdown:
       });
     }
 
-    console.log(`✨ Token suggestion [${suggestedBy}]: "${suggestedName}" / $${suggestedSymbol}`);
-
     res.json({
       success: true,
       suggestedName,
