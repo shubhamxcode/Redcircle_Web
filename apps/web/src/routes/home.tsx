@@ -29,14 +29,13 @@ function CopyCA() {
 }
 
 export const Route = createFileRoute("/home")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    url: typeof search.url === "string" ? search.url : "",
-  }),
   component: HomeComponent,
 });
 
 function HomeComponent() {
-  const { url: initialUrl } = Route.useSearch();
+  const initialUrl = sessionStorage.getItem("hotLaunchUrl") || undefined;
+  if (initialUrl) sessionStorage.removeItem("hotLaunchUrl");
+
   return (
     <div className="relative min-h-screen bg-black">
       {/* Dot-grid background */}

@@ -250,7 +250,8 @@ function HotPage() {
 
   const handleLaunch = () => {
     if (!selectedPost) return;
-    navigate({ to: "/home", search: { url: selectedPost.redditUrl } });
+    sessionStorage.setItem("hotLaunchUrl", selectedPost.redditUrl);
+    navigate({ to: "/home" });
   };
 
   return (

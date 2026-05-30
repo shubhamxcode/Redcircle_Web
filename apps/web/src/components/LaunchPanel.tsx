@@ -127,20 +127,13 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
     setRocketGone(false);
   }, [step]);
 
-  // Auto-fetch when redirected from hot page with a pre-filled URL
-  useEffect(() => {
-    if (initialUrl) handleFetchPost(initialUrl);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleFetchPost = async (overrideUrl?: string) => {
-    const targetUrl = overrideUrl ?? url;
+  const handleFetchPost = async () => {
+    const targetUrl = url;
     if (!targetUrl) return;
     setError("");
     setStep("fetching");
     setPostPreview(null);
     setQuote(null);
-    if (overrideUrl) setUrl(overrideUrl);
     try {
       const apiUrl = getApiUrl();
       const res  = await fetch(`${apiUrl}/api/posts/fetch-reddit`, {
