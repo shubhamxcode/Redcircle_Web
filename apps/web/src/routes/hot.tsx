@@ -7,7 +7,6 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useHotPosts } from "@/hooks/useHotPosts";
 
 export const Route = createFileRoute("/hot")({
@@ -29,47 +28,11 @@ function timeAgo(ms: number): string {
   return "just now";
 }
 
-function HotPopup({ onDismiss }: { onDismiss: () => void }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const showTimer = setTimeout(() => setVisible(true), 30);
-    const hideTimer = setTimeout(() => {
-      setVisible(false);
-      setTimeout(onDismiss, 400);
-    }, 5000);
-    return () => {
-      clearTimeout(showTimer);
-      clearTimeout(hideTimer);
-    };
-  }, [onDismiss]);
-
-  return (
-    <div
-      className={`fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none transition-opacity duration-400 ${visible ? "opacity-100" : "opacity-0"}`}
-    >
-      <div
-        className={`w-full max-w-sm rounded-2xl border border-orange-500/30 bg-[#111] shadow-2xl px-6 py-5 transition-all duration-400 ${visible ? "scale-100" : "scale-95"}`}
-      >
-        <div className="flex items-center gap-2.5 mb-3">
-          <Flame className="w-5 h-5 text-orange-400 flex-shrink-0" />
-          <p className="text-sm font-semibold text-white">Hot &amp; Trending Posts</p>
-        </div>
-        <p className="text-sm text-white/60 leading-relaxed">
-          These are today's hottest posts from Reddit — content already going viral with massive engagement. Use them to launch a token on Redcircle for the highest chance of explosive growth.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function HotPage() {
   const { posts, loading, error, cachedAt, refresh } = useHotPosts();
-  const [showModal, setShowModal] = useState(true);
 
   return (
     <div className="min-h-screen">
-      {showModal && <HotPopup onDismiss={() => setShowModal(false)} />}
 
       <div className="mx-auto max-w-2xl px-4 py-8">
 
