@@ -9,8 +9,6 @@
 		"verbatimModuleSyntax": true,
 		"skipLibCheck": true,
 		"types": ["vite/client"],
-		"rootDirs": ["."],
-		"ignoreDeprecations": "6.0",
 		"paths": {
 			"@/*": ["./src/*"]
 		}

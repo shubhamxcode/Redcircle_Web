@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+import { getApiUrl } from "@/lib/auth";
 
 export interface HotPost {
   id: string;
@@ -24,7 +23,7 @@ export function useHotPosts() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/trending`);
+      const res = await fetch(`${getApiUrl()}/api/trending`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { posts?: HotPost[]; cachedAt?: string };
       setPosts(data.posts ?? []);
