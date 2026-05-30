@@ -94,12 +94,7 @@ export default function LaunchPanel() {
 
   const activeStage = getActiveStage(step);
 
-  // Default name + symbol from Reddit post context (Gemini suggest-name commented out)
-  useEffect(() => {
-    if (!postPreview) return;
-    setTokenName(postPreview.title.split(" ").slice(0, 3).join(" ").slice(0, 32));
-    setTokenSymbol(postPreview.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8));
-  }, [postPreview]);
+  // Name/symbol are set directly in handleFetchPost after AI suggestion; this is a no-op safety fallback
 
   // Poll for confirmation
   useEffect(() => {
@@ -151,9 +146,12 @@ export default function LaunchPanel() {
       setPostPreview(post);
       setStep("previewing");
 
-      // Auto-fetch quote silently so launch cost shows immediately
-      const name   = post.title.split(" ").slice(0, 3).join(" ").slice(0, 32);
-      const symbol = post.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+      // Use AI-suggested name/symbol (server falls back to heuristic if Gemini fails)
+      const name   = (data.suggestedName   || post.title.split(" ").slice(0, 3).join(" ")).slice(0, 32);
+      const symbol = (data.suggestedSymbol || post.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "")).slice(0, 8);
+      setTokenName(name);
+      setTokenSymbol(symbol);
+      if (data.suggestedDescription) setDescription(data.suggestedDescription);
       try {
         const qRes  = await fetch(`${apiUrl}/api/launches/quote?tokenName=${encodeURIComponent(name)}&tokenSymbol=${encodeURIComponent(symbol)}`);
         const qData = await qRes.json();
@@ -229,7 +227,7 @@ export default function LaunchPanel() {
   const isBusy = ["fetching", "quoting", "preparing", "signing", "submitting", "polling"].includes(step);
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full max-w-3xl mx-auto">
       {/* ── Success screen ── */}
       <AnimatePresence>
         {step === "done" && mintAddress && (
@@ -363,19 +361,13 @@ export default function LaunchPanel() {
             </div>
           </div>
 
-          {/* Terminal status line */}
-          <div className="mx-6 mb-1 px-3 py-1.5 rounded-md bg-black/60 border border-white/[0.05] font-mono text-[10px] text-white/30 flex items-center gap-2">
-            <Terminal className="w-3 h-3 text-[#00FFD1]/40 shrink-0" />
-            <span className={step === "error" ? "text-red-400/70" : ""}>{STEP_STATUS[step]}</span>
-            {isBusy && <span className="ml-auto"><Loader2 className="w-3 h-3 animate-spin text-[#E8431C]/60" /></span>}
-          </div>
 
           <div className="p-4 sm:p-6 space-y-6">
 
             {/* URL input */}
             <div className={`space-y-3 ${!postPreview ? "max-w-xl mx-auto" : ""}`}>
-              <label className="block text-[10px] font-mono uppercase tracking-widest text-white/30 ml-0.5">
-                Reddit Post URL
+              <label className="block text-[12px] font-mono uppercase tracking-widest text-white ml-0.5">
+                Reddit Post Link
               </label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 flex items-center gap-2 bg-black/60 border border-white/[0.07] rounded-lg px-3 py-2.5 focus-within:border-[#E8431C]/30 focus-within:shadow-[0_0_0_1px_rgba(232,67,28,0.1)] transition-all">
@@ -423,79 +415,71 @@ export default function LaunchPanel() {
                 >
                   <div className="h-px bg-white/[0.04]" />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {/* Left */}
-                    <div className="space-y-5">
-                      {/* Post preview */}
-                      <div>
-                        <SectionLabel n={1} text="Post Preview" />
-                        <div className="bg-black/50 border border-white/[0.06] rounded-xl p-3.5 mt-2">
-                          <div className="flex gap-3">
-                            {postPreview.thumbnail && (
-                              <img src={postPreview.thumbnail} alt="" className="w-14 h-14 rounded-lg object-cover bg-neutral-900 shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-white/90 font-medium leading-snug mb-1 line-clamp-2 text-sm">{postPreview.title}</h4>
-                              <div className="flex items-center gap-2 text-[10px] text-white/35 font-mono">
-                                <span className="text-white/50">r/{postPreview.subreddit}</span>
-                                <span>·</span>
-                                <span>u/{postPreview.author}</span>
-                              </div>
-                              <div className="mt-1.5 flex gap-3 text-[10px] text-white/40">
-                                <span className="flex items-center gap-1"><TrendingUp className="w-2.5 h-2.5" />{postPreview.upvotes.toLocaleString()}</span>
-                                <span className="flex items-center gap-1"><Users className="w-2.5 h-2.5" />{postPreview.comments.toLocaleString()}</span>
-                              </div>
+                  <div className="space-y-5">
+                    {/* Step 1 — Post Preview */}
+                    <div>
+                      <SectionLabel n={1} text="Post Preview" />
+                      <div className="bg-black/50 border border-white/[0.06] rounded-xl p-3.5 mt-2">
+                        <div className="flex gap-3">
+                          {postPreview.thumbnail && (
+                            <img src={postPreview.thumbnail} alt="" className="w-14 h-14 rounded-lg object-cover bg-neutral-900 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-white/90 font-medium leading-snug mb-1 line-clamp-2 text-sm">{postPreview.title}</h4>
+                            <div className="flex items-center gap-2 text-[10px] text-white/35 font-mono">
+                              <span className="text-white/50">r/{postPreview.subreddit}</span>
+                              <span>·</span>
+                              <span>u/{postPreview.author}</span>
+                            </div>
+                            <div className="mt-1.5 flex gap-3 text-[10px] text-white/40">
+                              <span className="flex items-center gap-1"><TrendingUp className="w-2.5 h-2.5" />{postPreview.upvotes.toLocaleString()}</span>
+                              <span className="flex items-center gap-1"><Users className="w-2.5 h-2.5" />{postPreview.comments.toLocaleString()}</span>
                             </div>
                           </div>
                         </div>
                       </div>
-
-                      {/* Token details */}
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <SectionLabel n={2} text="Token Details" />
-                        </div>
-                        <TerminalInput
-                          value={tokenName}
-                          onChange={(v) => setTokenName(v.slice(0, 32))}
-                          placeholder="Token name"
-                          mono={false}
-                        />
-                        <TerminalInput
-                          value={tokenSymbol}
-                          onChange={(v) => setTokenSymbol(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
-                          placeholder="SYMBOL"
-                          mono
-                        />
-                        <textarea
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          placeholder="Why should people trade this token?"
-                          rows={2}
-                          className="w-full bg-black/60 border border-white/[0.07] rounded-lg px-3 py-2.5 text-white/80 text-sm placeholder:text-white/15 focus:outline-none focus:border-[#E8431C]/30 focus:shadow-[0_0_0_1px_rgba(232,67,28,0.1)] transition-all resize-none font-mono text-xs"
-                        />
-                      </div>
                     </div>
 
-                    {/* Right */}
-                    <div className="space-y-5">
-                      {/* Wallet */}
-                      <div>
-                        <SectionLabel n={3} text="Payer Wallet" />
-                        <div className="mt-2 flex flex-col gap-2">
-                          <WalletMultiButton className="!rounded-lg !h-10 !text-sm !w-full !justify-center !font-mono" />
-                          {connected && publicKey && (
-                            <p className="text-[10px] text-[#00FFD1]/40 font-mono text-center break-all px-1">
-                              {publicKey.toBase58()}
-                            </p>
-                          )}
-                        </div>
+                    {/* Step 2 — Token Details */}
+                    <div className="space-y-2">
+                      <SectionLabel n={2} text="Token Details" />
+                      <TerminalInput
+                        value={tokenName}
+                        onChange={(v) => setTokenName(v.slice(0, 32))}
+                        placeholder="Token name"
+                        mono={false}
+                      />
+                      <TerminalInput
+                        value={tokenSymbol}
+                        onChange={(v) => setTokenSymbol(v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+                        placeholder="SYMBOL"
+                        mono
+                      />
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Why should people trade this token?"
+                        rows={2}
+                        className="w-full bg-black/60 border border-white/[0.07] rounded-lg px-3 py-2.5 text-white/80 text-sm placeholder:text-white/15 focus:outline-none focus:border-[#E8431C]/30 focus:shadow-[0_0_0_1px_rgba(232,67,28,0.1)] transition-all resize-none font-mono text-xs"
+                      />
+                    </div>
+
+                    {/* Step 3 — Payer Wallet */}
+                    <div>
+                      <SectionLabel n={3} text="Payer Wallet" />
+                      <div className="mt-2 flex flex-col gap-2">
+                        <WalletMultiButton className="!rounded-lg !h-10 !text-sm !w-full !justify-center !font-mono" />
+                        {connected && publicKey && (
+                          <p className="text-[10px] text-[#00FFD1]/40 font-mono text-center break-all px-1">
+                            {publicKey.toBase58()}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Launch button */}
-                  <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t border-white/[0.04]">
+                  {/* Launch button — centered */}
+                  <div className="flex flex-col sm:flex-row justify-center gap-2 pt-2 border-t border-white/[0.04]">
                     <button
                       onClick={reset}
                       disabled={isBusy}

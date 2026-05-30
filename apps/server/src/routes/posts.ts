@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, asc, and, gte, lte, like, ilike, or, sql } from "drizzle-orm";
+import { eq, desc, asc, and, gte, ilike } from "drizzle-orm";
 import { getEarnings } from "../services/orynth.service";
 
 const { posts, launches } = schema;
@@ -33,23 +33,92 @@ router.post("/fetch-reddit", async (req, res) => {
       });
     }
 
-    // Check if post is already tokenized
-    const existingPost = await db
-      .select()
-      .from(posts)
-      .where(eq(posts.redditPostId, redditPost.id))
-      .limit(1);
+    // Fallback values
+    let suggestedName        = redditPost.title.split(" ").slice(0, 3).join(" ").slice(0, 32);
+    let suggestedSymbol      = redditPost.subreddit.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    let suggestedDescription = "";
+    let suggestedBy          = "fallback";
 
-    if (existingPost.length > 0) {
-      return res.status(409).json({ 
+    // Run DB duplicate check and Gemini in parallel
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const hasText   = !!redditPost.selftext?.trim();
+    const hasImage  = !!redditPost.thumbnail?.startsWith("https://");
+
+    const [existingPosts] = await Promise.all([
+      db.select().from(posts).where(eq(posts.redditPostId, redditPost.id)).limit(1),
+      (async () => {
+        if (!geminiKey || (!hasText && !hasImage)) return;
+        try {
+          const prompt = `You are a crypto memecoin naming expert. Create a viral, punchy Solana token name, ticker, and trading pitch for this Reddit post.
+
+Rules:
+- name: max 32 chars, short and catchy (2-3 words max), memecoin energy, captures the vibe/joke/theme
+- symbol: max 8 chars, uppercase, no spaces, memorable (like DOGE, PEPE, SHIB, WIF)
+- description: answer "why should people trade this token?" in 1-2 punchy sentences — make it hype, fun, and reference the post's theme. Write it like a memecoin pitch, first person plural ("we", "this token")
+- Do NOT just copy the title words for the name — be creative, funny, or clever
+${hasImage ? "- Use the thumbnail image to understand the visual vibe of the post" : ""}
+
+Post title: "${redditPost.title}"
+Subreddit: r/${redditPost.subreddit}
+Upvotes: ${redditPost.upvotes}
+${hasText ? `Content: "${redditPost.selftext.slice(0, 300)}"` : ""}
+
+Reply with ONLY a JSON object, no markdown:
+{"name":"<name>","symbol":"<SYMBOL>","description":"<trading pitch>"}`;
+
+          // Fetch image and call Gemini in parallel
+          const [imageBase64] = await Promise.all([
+            hasImage
+              ? fetch(redditPost.thumbnail!, { signal: AbortSignal.timeout(5000) })
+                  .then(r => r.arrayBuffer())
+                  .then(buf => Buffer.from(buf).toString("base64"))
+                  .catch(() => null)
+              : Promise.resolve(null),
+          ]);
+
+          const parts: any[] = [{ text: prompt }];
+          if (imageBase64) parts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
+
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts }] }),
+              signal: AbortSignal.timeout(15000),
+            }
+          );
+          const geminiData = await geminiRes.json() as any;
+          const raw = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.name)        suggestedName        = String(parsed.name).slice(0, 32);
+            if (parsed.symbol)      suggestedSymbol      = String(parsed.symbol).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+            if (parsed.description) suggestedDescription = String(parsed.description).slice(0, 300);
+            suggestedBy = "gemini";
+          }
+        } catch (e) {
+          console.warn("⚠️ Gemini failed, using fallback:", e);
+        }
+      })(),
+    ]);
+
+    if (existingPosts.length > 0) {
+      return res.status(409).json({
         error: "This post has already been tokenized",
-        existingPost: existingPost[0]
+        existingPost: existingPosts[0],
       });
     }
 
-    // Return post data for preview
+    console.log(`✨ Token suggestion [${suggestedBy}]: "${suggestedName}" / $${suggestedSymbol}`);
+
     res.json({
       success: true,
+      suggestedName,
+      suggestedSymbol,
+      suggestedDescription,
+      suggestedBy,
       post: {
         redditPostId: redditPost.id,
         title: redditPost.title,
@@ -66,8 +135,8 @@ router.post("/fetch-reddit", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error fetching Reddit post:", error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : "Failed to fetch Reddit post" 
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to fetch Reddit post",
     });
   }
 });
@@ -112,7 +181,7 @@ router.get("/search", async (req, res) => {
     let query = db.select().from(posts);
     
     // Build conditions array
-    const conditions = [];
+    const conditions: any[] = [];
     
     // Status filter
     if (status && status !== "all") {
@@ -282,7 +351,7 @@ router.get("/", async (req, res) => {
     const baseQuery = db.select().from(posts);
 
     // Apply filters
-    const conditions = [];
+    const conditions: any[] = [];
     if (status && status !== "all") {
       conditions.push(eq(posts.status, status));
     }

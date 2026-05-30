@@ -38,7 +38,7 @@ export default function Navbar() {
             className="flex shrink-0 items-center gap-2 font-extrabold text-lg tracking-tight text-white"
           >
             <img src="/logo.png" alt="Redcircle" className="h-8 w-auto" />
-            <span className="hidden xs:inline sm:inline">Redcircle</span>
+            <span>Redcircle</span>
           </Link>
 
           {/* Desktop nav — absolutely centered so it stays centered regardless of side content width */}

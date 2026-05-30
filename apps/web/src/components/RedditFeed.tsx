@@ -78,14 +78,14 @@ function FilterDropdown<T extends string>({
       <button
         onClick={() => setOpen((p) => !p)}
         className={cn(
-          "flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-white transition-all min-w-[130px] justify-between",
+          "flex items-center gap-1 sm:gap-2 rounded-xl border px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-white transition-all min-w-0 flex-1 justify-between whitespace-nowrap",
           open
-            ? "border-[#b06ef3]/70 bg-[#0d0d14] shadow-[0_0_0_1px_rgba(176,110,243,0.3),0_0_16px_rgba(176,110,243,0.15)]"
-            : "border-[#b06ef3]/30 bg-[#0d0d14] hover:border-[#b06ef3]/60",
+            ? "border-[#E8431C]/70 bg-[#0d0d14] shadow-[0_0_0_1px_rgba(232,67,28,0.3),0_0_16px_rgba(232,67,28,0.15)]"
+            : "border-[#E8431C]/30 bg-[#0d0d14] hover:border-[#E8431C]/60",
         )}
       >
         {label}
-        <ChevronDown className={cn("h-3.5 w-3.5 text-white/50 transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/50 transition-transform shrink-0", open && "rotate-180")} />
       </button>
 
       <AnimatePresence>
@@ -109,7 +109,7 @@ function FilterDropdown<T extends string>({
                 )}
               >
                 <span className="w-4 flex-shrink-0">
-                  {opt.value === value && <Check className="h-3.5 w-3.5 text-[#b06ef3]" />}
+                  {opt.value === value && <Check className="h-3.5 w-3.5 text-[#E8431C]" />}
                 </span>
                 {opt.label}
               </button>
@@ -299,8 +299,8 @@ export default function RedditFeed() {
         <SearchBar onSearch={handleSearch} showFilters />
 
         {/* Filter + Refresh row */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <FilterDropdown options={SORT_FIELDS}   value={sortField}  onChange={handleFieldChange} />
             <FilterDropdown options={SORT_ORDERS}   value={sortOrder}  onChange={handleOrderChange} />
             <FilterDropdown options={TIME_WINDOWS}  value={timeWindow} onChange={handleTimeChange} />
