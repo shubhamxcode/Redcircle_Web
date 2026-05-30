@@ -111,7 +111,6 @@ Reply with ONLY a JSON object, no markdown:
       });
     }
 
-
     res.json({
       success: true,
       suggestedName,

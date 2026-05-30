@@ -16,6 +16,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as LaunchRouteImport } from './routes/launch'
+import { Route as HotRouteImport } from './routes/hot'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -58,6 +59,11 @@ const LaunchRoute = LaunchRouteImport.update({
   path: '/launch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HotRoute = HotRouteImport.update({
+  id: '/hot',
+  path: '/hot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HomeRoute = HomeRouteImport.update({
   id: '/home',
   path: '/home',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
+  '/hot': typeof HotRoute
   '/launch': typeof LaunchRoute
   '/leaderboard': typeof LeaderboardRoute
   '/privacy': typeof PrivacyRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
+  '/hot': typeof HotRoute
   '/launch': typeof LaunchRoute
   '/leaderboard': typeof LeaderboardRoute
   '/privacy': typeof PrivacyRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/home': typeof HomeRoute
+  '/hot': typeof HotRoute
   '/launch': typeof LaunchRoute
   '/leaderboard': typeof LeaderboardRoute
   '/privacy': typeof PrivacyRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/home'
+    | '/hot'
     | '/launch'
     | '/leaderboard'
     | '/privacy'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/home'
+    | '/hot'
     | '/launch'
     | '/leaderboard'
     | '/privacy'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/home'
+    | '/hot'
     | '/launch'
     | '/leaderboard'
     | '/privacy'
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   FeedRoute: typeof FeedRoute
   HomeRoute: typeof HomeRoute
+  HotRoute: typeof HotRoute
   LaunchRoute: typeof LaunchRoute
   LeaderboardRoute: typeof LeaderboardRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -250,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LaunchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hot': {
+      id: '/hot'
+      path: '/hot'
+      fullPath: '/hot'
+      preLoaderRoute: typeof HotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/home': {
       id: '/home'
       path: '/home'
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   FeedRoute: FeedRoute,
   HomeRoute: HomeRoute,
+  HotRoute: HotRoute,
   LaunchRoute: LaunchRoute,
   LeaderboardRoute: LeaderboardRoute,
   PrivacyRoute: PrivacyRoute,
