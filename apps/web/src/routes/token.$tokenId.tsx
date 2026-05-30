@@ -97,6 +97,31 @@ function normalizePost(post: BackendPost): FeedPost {
 }
 
 
+function ChartEmbed({ poolAddress, mintAddress }: { poolAddress: string | null; mintAddress: string }) {
+  const [geckoFailed, setGeckoFailed] = useState(false);
+
+  if (!poolAddress || geckoFailed) {
+    // Fallback: DexScreener always works with just the mint address
+    return (
+      <iframe
+        src={`https://dexscreener.com/solana/${mintAddress}?embed=1&theme=dark&trades=1&info=0`}
+        style={{ width: "100%", height: "100%", border: "none" }}
+        title="Live Chart"
+      />
+    );
+  }
+
+  return (
+    <iframe
+      key={poolAddress}
+      src={`https://www.geckoterminal.com/solana/pools/${poolAddress}?embed=1&info=0&swaps=1`}
+      style={{ width: "100%", height: "100%", border: "none" }}
+      title="Live Chart"
+      onError={() => setGeckoFailed(true)}
+    />
+  );
+}
+
 function TokenDetailsPage() {
   const { tokenId } = Route.useParams();
   const navigate = Route.useNavigate();
@@ -249,20 +274,10 @@ function TokenDetailsPage() {
             {isOnChain ? (
               <div className="rounded-2xl border border-white/8 overflow-hidden bg-[#0d0d0d]"
                 style={{ height: "calc(100vh - 220px)", minHeight: 400, maxHeight: 680 }}>
-                {poolAddress ? (
-                  <iframe
-                    src={`https://www.geckoterminal.com/solana/pools/${poolAddress}?embed=1&info=0&swaps=1`}
-                    style={{ width: "100%", height: "100%", border: "none" }}
-                    title="Live Chart"
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="flex flex-col items-center gap-2 text-white/30">
-                      <RefreshCw className="h-5 w-5 animate-spin" />
-                      <span className="text-xs">Loading chart…</span>
-                    </div>
-                  </div>
-                )}
+                <ChartEmbed
+                  poolAddress={poolAddress}
+                  mintAddress={post.tokenMintAddress!}
+                />
               </div>
             ) : (
               <PriceChart
