@@ -196,7 +196,22 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       },
       name:        body.tokenName,
       symbol:      body.tokenSymbol.toUpperCase(),
-      description: body.description?.trim() || body.redditTitle,
+      description: await (async () => {
+        const base = body.description?.trim() || body.redditTitle;
+        // Look up the Redcircle post UUID to build the token page URL
+        try {
+          const [dbPost] = await db.select({ id: posts.id })
+            .from(posts)
+            .where(eq(posts.redditPostId, body.redditPostId))
+            .limit(1);
+          const tokenPageUrl = dbPost
+            ? `https://redcircle.lol/token/${dbPost.id}`
+            : "https://redcircle.lol";
+          return `${base}\n\n🔴 Redcircle: ${tokenPageUrl}\n📝 Reddit: ${body.redditUrl}`;
+        } catch {
+          return `${base}\n\n📝 Reddit: ${body.redditUrl}`;
+        }
+      })(),
       imageUrl:    body.imageUrl ?? body.redditThumbnail ?? "https://www.redcircle.lol/logo.png",
     };
 
