@@ -9,23 +9,22 @@ import PriceChart from "@/components/PriceChart";
 import type { FeedPost } from "@/components/FeedCard";
 import { cn } from "@/lib/utils";
 
-type DexPair = {
+type TokenPair = {
   priceUsd: string;
-  priceNative: string;
-  volume: { h24: number; h6: number; h1: number; m5: number };
-  priceChange: { h24?: number; h6?: number; h1?: number; m5?: number };
+  volume: { h24: number };
+  priceChange: { h24?: number | null };
   liquidity?: { usd: number };
   fdv: number;
   marketCap: number;
-  txns: { h24: { buys: number; sells: number } };
-  pairAddress: string;
+  poolAddress: string | null;
+  pairAddress: string | null;
 };
 
-async function fetchDexScreenerData(mintAddress: string): Promise<DexPair | null> {
+async function fetchTokenPrice(mintAddress: string): Promise<TokenPair | null> {
   try {
     const { getApiUrl } = await import("@/lib/auth");
     const res = await fetch(`${getApiUrl()}/api/tokens/${mintAddress}/price`);
-    const data = await res.json() as { pair: DexPair | null };
+    const data = await res.json() as { pair: TokenPair | null };
     return data.pair ?? null;
   } catch {
     return null;
@@ -105,8 +104,9 @@ function TokenDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartRefreshKey, setChartRefreshKey] = useState(0);
-  const [dex, setDex] = useState<DexPair | null>(null);
+  const [dex, setDex] = useState<TokenPair | null>(null);
   const [dexLoading, setDexLoading] = useState(false);
+  const [poolAddress, setPoolAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [creatorEarnings, setCreatorEarnings] = useState<string>("0");
 
@@ -122,18 +122,20 @@ function TokenDetailsPage() {
       const normalized = normalizePost(data.post);
       setPost(normalized);
 
-      // Fetch creator earnings
+      const { getApiUrl } = await import("@/lib/auth");
+
+      // Fetch creator earnings — also gives us the pool address for free
       try {
-        const { getApiUrl } = await import("@/lib/auth");
         const erRes  = await fetch(`${getApiUrl()}/api/posts/${tokenId}/creator-earnings`);
-        const erData = await erRes.json() as { success: boolean; earningsUsdc?: string };
+        const erData = await erRes.json() as { success: boolean; earningsUsdc?: string; poolAddress?: string };
         if (erData.success && erData.earningsUsdc != null) setCreatorEarnings(erData.earningsUsdc);
+        if (erData.poolAddress) setPoolAddress(erData.poolAddress);
       } catch { /* non-critical */ }
 
       if (normalized.tokenMintAddress) {
         setDexLoading(true);
-        fetchDexScreenerData(normalized.tokenMintAddress)
-          .then(setDex)
+        fetchTokenPrice(normalized.tokenMintAddress)
+          .then(d => { setDex(d); if (d?.poolAddress) setPoolAddress(p => p ?? d.poolAddress); })
           .finally(() => setDexLoading(false));
       }
     } catch (err) {
@@ -148,7 +150,7 @@ function TokenDetailsPage() {
   useEffect(() => {
     if (!post?.tokenMintAddress) return;
     const interval = setInterval(() => {
-      fetchDexScreenerData(post.tokenMintAddress!).then(setDex);
+      fetchTokenPrice(post.tokenMintAddress!).then(setDex);
     }, 30_000);
     return () => clearInterval(interval);
   }, [post?.tokenMintAddress]);
@@ -178,7 +180,7 @@ function TokenDetailsPage() {
   }
 
   // Only show price change when DexScreener has real h24 data
-  const priceChange = dex?.priceChange.h24 ?? null;
+  const priceChange = typeof dex?.priceChange.h24 === "number" ? dex.priceChange.h24 : null;
   const isPositive = (priceChange ?? 0) >= 0;
   const isOnChain = !!post.tokenMintAddress;
 
@@ -246,12 +248,21 @@ function TokenDetailsPage() {
           >
             {isOnChain ? (
               <div className="rounded-2xl border border-white/8 overflow-hidden bg-[#0d0d0d]"
-                style={{ height: "min(520px, 70vw)", minHeight: 320 }}>
-                <iframe
-                  src={`https://dexscreener.com/solana/${post.tokenMintAddress}?embed=1&theme=dark&trades=1&info=0`}
-                  style={{ width: "100%", height: "100%", border: "none" }}
-                  title="Live Chart"
-                />
+                style={{ height: "calc(100vh - 220px)", minHeight: 400, maxHeight: 680 }}>
+                {poolAddress ? (
+                  <iframe
+                    src={`https://www.geckoterminal.com/solana/pools/${poolAddress}?embed=1&info=0&swaps=1`}
+                    style={{ width: "100%", height: "100%", border: "none" }}
+                    title="Live Chart"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="flex flex-col items-center gap-2 text-white/30">
+                      <RefreshCw className="h-5 w-5 animate-spin" />
+                      <span className="text-xs">Loading chart…</span>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <PriceChart
@@ -284,7 +295,7 @@ function TokenDetailsPage() {
               <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
                 <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3">Trade</p>
                 <a
-                  href={`https://jup.ag/swap/SOL-${post.tokenMintAddress}`}
+                  href={`https://jup.ag/swap?inputMint=So11111111111111111111111111111111111111112&outputMint=${post.tokenMintAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-2.5 text-sm font-bold text-black hover:bg-green-400 transition-colors"
