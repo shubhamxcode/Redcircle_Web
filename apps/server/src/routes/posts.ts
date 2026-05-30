@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, asc, and, gte, ilike } from "drizzle-orm";
+import { eq, desc, asc, and, gte, ilike, inArray } from "drizzle-orm";
 import { getEarnings } from "../services/orynth.service";
 
 const { posts, launches } = schema;
@@ -500,6 +500,43 @@ router.get("/:id/creator-earnings", async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching creator earnings:", err);
     res.status(500).json({ success: false, error: "Failed to fetch creator earnings" });
+  }
+});
+
+/**
+ * POST /api/posts/check-tokenized
+ * Given a list of Reddit post IDs, returns which ones have been tokenized on the platform.
+ */
+router.post("/check-tokenized", async (req, res) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return res.json({ tokenized: {} });
+
+    const rows = await db
+      .select({
+        redditPostId: posts.redditPostId,
+        id: posts.id,
+        tokenSymbol: posts.tokenSymbol,
+        tokenMintAddress: posts.tokenMintAddress,
+        status: posts.status,
+      })
+      .from(posts)
+      .where(inArray(posts.redditPostId, ids));
+
+    const tokenized: Record<string, { postId: string; tokenSymbol: string | null; mintAddress: string | null; status: string }> = {};
+    for (const row of rows) {
+      tokenized[row.redditPostId] = {
+        postId: row.id,
+        tokenSymbol: row.tokenSymbol,
+        mintAddress: row.tokenMintAddress,
+        status: row.status,
+      };
+    }
+
+    res.json({ tokenized });
+  } catch (err) {
+    console.error("❌ Error checking tokenized posts:", err);
+    res.status(500).json({ tokenized: {} });
   }
 });
 
