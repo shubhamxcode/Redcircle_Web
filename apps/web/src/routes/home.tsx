@@ -29,10 +29,14 @@ function CopyCA() {
 }
 
 export const Route = createFileRoute("/home")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    url: typeof search.url === "string" ? search.url : "",
+  }),
   component: HomeComponent,
 });
 
 function HomeComponent() {
+  const { url: initialUrl } = Route.useSearch();
   return (
     <div className="relative min-h-screen bg-black">
       {/* Dot-grid background */}
@@ -88,7 +92,7 @@ function HomeComponent() {
 
         {/* Launch widget */}
         <div className="mb-12 sm:mb-20">
-          <LaunchPanel />
+          <LaunchPanel initialUrl={initialUrl || undefined} />
         </div>
 
         <div className="mb-8 sm:mb-10" />

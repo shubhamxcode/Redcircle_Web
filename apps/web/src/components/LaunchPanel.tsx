@@ -76,10 +76,10 @@ const PARTICLES = [
   { x: -50, y: 0,   color: "#00FFD1" },
 ];
 
-export default function LaunchPanel() {
+export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
   const { publicKey, signTransaction, connected } = useWallet();
 
-  const [url, setUrl]               = useState("");
+  const [url, setUrl]               = useState(initialUrl || "");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
   const [quote, setQuote]           = useState<Quote | null>(null);
   const [tokenName, setTokenName]   = useState("");
@@ -127,18 +127,26 @@ export default function LaunchPanel() {
     setRocketGone(false);
   }, [step]);
 
-  const handleFetchPost = async () => {
-    if (!url) return;
+  // Auto-fetch when redirected from hot page with a pre-filled URL
+  useEffect(() => {
+    if (initialUrl) handleFetchPost(initialUrl);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleFetchPost = async (overrideUrl?: string) => {
+    const targetUrl = overrideUrl ?? url;
+    if (!targetUrl) return;
     setError("");
     setStep("fetching");
     setPostPreview(null);
     setQuote(null);
+    if (overrideUrl) setUrl(overrideUrl);
     try {
       const apiUrl = getApiUrl();
       const res  = await fetch(`${apiUrl}/api/posts/fetch-reddit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: targetUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch Reddit post");
