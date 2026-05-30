@@ -86,6 +86,8 @@ app.get("/api/tokens/:mint/price", async (req, res) => {
       poolsRes.json() as Promise<any>,
     ]);
 
+    console.log(`🦎 GeckoTerminal [${mint.slice(0,8)}] status: ${tokenRes.status} data:`, JSON.stringify(tokenData).slice(0, 200));
+
     const attrs = tokenData?.data?.attributes;
     if (!attrs) return res.json({ pair: null });
 
