@@ -124,6 +124,21 @@ export class RedditService {
     return null;
   }
 
+  // Resolve Reddit share links (reddit.com/r/sub/s/XXXX) to the full post URL
+  static async resolveShareUrl(url: string): Promise<string> {
+    if (!/reddit\.com\/r\/[^/]+\/s\//i.test(url)) return url;
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        redirect: "follow",
+        headers: { "User-Agent": this.USER_AGENT },
+      });
+      return res.url || url;
+    } catch {
+      return url;
+    }
+  }
+
   /**
    * Build Reddit JSON API URL from post ID
    */
@@ -136,8 +151,9 @@ export class RedditService {
    * Fetch post data from Reddit
    */
   static async fetchPost(url: string): Promise<RedditPost> {
-    const postId = this.extractPostId(url);
-    
+    const resolvedUrl = await this.resolveShareUrl(url);
+    const postId = this.extractPostId(resolvedUrl);
+
     if (!postId) {
       throw new Error("Invalid Reddit URL. Please provide a valid Reddit post URL.");
     }
