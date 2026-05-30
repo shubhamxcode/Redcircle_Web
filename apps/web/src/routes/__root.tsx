@@ -1,7 +1,6 @@
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import Navbar from "@/components/Navbar";
-import TickerBar from "@/components/TickerBar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { WalletContextProvider } from "@/contexts/WalletContext";
 import {
@@ -62,8 +61,7 @@ function RootComponent() {
 					<AuthProvider>
 						<ScrollToTop />
 						<Navbar />
-						<TickerBar />
-						<div className="pt-24">
+						<div className="pt-16">
 							<Outlet />
 						</div>
 						<Toaster richColors />

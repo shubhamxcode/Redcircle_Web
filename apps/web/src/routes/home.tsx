@@ -91,14 +91,7 @@ function HomeComponent() {
           <LaunchPanel />
         </div>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 sm:gap-4 mb-8 sm:mb-10">
-          <div className="flex-1 h-px bg-white/[0.06]" />
-          <span className="text-[10px] sm:text-xs text-white/25 uppercase tracking-widest whitespace-nowrap">
-            Launched Tokens
-          </span>
-          <div className="flex-1 h-px bg-white/[0.06]" />
-        </div>
+        <div className="mb-8 sm:mb-10" />
 
         {/* Feed */}
         <RedditFeed />

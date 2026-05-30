@@ -97,15 +97,6 @@ function normalizePost(post: BackendPost): FeedPost {
   };
 }
 
-function StatPill({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="flex flex-col gap-0.5 px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 min-w-[100px]">
-      <span className="text-[10px] uppercase tracking-wider text-white/40 font-medium">{label}</span>
-      <span className="text-sm font-semibold text-white">{value}</span>
-      {sub && <span className="text-[10px] text-white/30">{sub}</span>}
-    </div>
-  );
-}
 
 function TokenDetailsPage() {
   const { tokenId } = Route.useParams();
@@ -214,53 +205,34 @@ function TokenDetailsPage() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg sm:text-xl font-bold text-white">{post.tokenSymbol}</h1>
-                <span className={cn(
-                  "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                  post.status === "active" ? "bg-green-500/15 text-green-400" : "bg-yellow-500/15 text-yellow-400"
-                )}>{post.status}</span>
               </div>
               <p className="text-xs text-white/40 truncate max-w-[200px] sm:max-w-sm md:max-w-lg">{post.title}</p>
             </div>
           </div>
 
-          {/* Price — left-aligned on mobile, right-aligned on sm+ */}
-          <div className="flex items-end gap-2 sm:text-right">
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-bold text-white tabular-nums">
-                  {dex ? `$${parseFloat(dex.priceUsd).toFixed(6)}` : "—"}
-                </span>
-                {dexLoading && <RefreshCw className="h-3 w-3 animate-spin text-white/30" />}
-              </div>
-              {priceChange !== null && (
-                <div className={cn("flex items-center gap-1 text-xs sm:text-sm font-semibold", isPositive ? "text-green-400" : "text-red-400")}>
-                  {isPositive ? <TrendingUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> : <TrendingDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
-                  {isPositive ? "+" : ""}{priceChange.toFixed(2)}% (24h)
+          {/* Price — only when DexScreener has data */}
+          {(dex || dexLoading) && (
+            <div className="flex items-end gap-2 sm:text-right">
+              <div>
+                <div className="flex items-baseline gap-2">
+                  {dex && (
+                    <span className="text-2xl sm:text-3xl font-bold text-white tabular-nums">
+                      ${parseFloat(dex.priceUsd).toFixed(6)}
+                    </span>
+                  )}
+                  {dexLoading && <RefreshCw className="h-3 w-3 animate-spin text-white/30" />}
                 </div>
-              )}
+                {priceChange !== null && (
+                  <div className={cn("flex items-center gap-1 text-xs sm:text-sm font-semibold", isPositive ? "text-green-400" : "text-red-400")}>
+                    {isPositive ? <TrendingUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> : <TrendingDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />}
+                    {isPositive ? "+" : ""}{priceChange.toFixed(2)}% (24h)
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
 
-        {/* ── Stats strip ── */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="flex flex-wrap gap-2 py-3 border-b border-white/8"
-        >
-          {dex?.marketCap ? <StatPill label="Market Cap" value={fmt(dex.marketCap)} /> : null}
-          {dex?.volume.h24 != null ? <StatPill label="Volume 24h" value={fmt(dex.volume.h24)} /> : null}
-          {dex?.liquidity?.usd ? <StatPill label="Liquidity" value={fmt(dex.liquidity.usd)} /> : null}
-          {dex?.txns.h24 && (
-            <StatPill
-              label="Txns 24h"
-              value={`${dex.txns.h24.buys + dex.txns.h24.sells}`}
-              sub={`${dex.txns.h24.buys}B / ${dex.txns.h24.sells}S`}
-            />
-          )}
-          {dex && <span className="hidden sm:inline self-center text-[10px] text-white/20 ml-auto">Live · DexScreener</span>}
-        </motion.div>
 
         {/* ── Main grid: chart (top/left) + right panel (bottom/right) ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px] gap-4 mt-4">
@@ -303,7 +275,7 @@ function TokenDetailsPage() {
             {(
               <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
                 <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest mb-1">Creator Earnings</p>
-                <p className="text-xl font-bold text-white">${parseFloat(creatorEarnings).toFixed(2)} <span className="text-xs font-normal text-white/40">USDC</span></p>
+                <p className="text-2xl font-bold text-white">${parseFloat(creatorEarnings).toFixed(2)} <span className="text-sm font-normal text-white/40">USDC</span></p>
               </div>
             )}
 
@@ -312,21 +284,13 @@ function TokenDetailsPage() {
               <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
                 <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3">Trade</p>
                 <a
-                  href={`https://dexscreener.com/solana/${post.tokenMintAddress}`}
+                  href={`https://jup.ag/swap/SOL-${post.tokenMintAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-2.5 text-sm font-bold text-black hover:bg-green-400 transition-colors"
                 >
                   <ArrowRightLeft className="h-4 w-4" />
-                  Trade on DexScreener
-                </a>
-                <a
-                  href={`https://jup.ag/swap/SOL-${post.tokenMintAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  Jupiter <ExternalLink className="h-3 w-3" />
+                  Trade on Jupiter
                 </a>
               </div>
             ) : (
@@ -340,7 +304,9 @@ function TokenDetailsPage() {
                 <div>
                   <p className="text-[10px] text-white/30 mb-1">Mint Address</p>
                   <div className="flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-3 py-2">
-                    <p className="text-[11px] text-white/70 font-mono break-all leading-relaxed flex-1">{post.tokenMintAddress}</p>
+                    <p className="text-[11px] text-white/70 font-mono flex-1" title={post.tokenMintAddress}>
+                      {post.tokenMintAddress.slice(0, 4)}...{post.tokenMintAddress.slice(-4)}
+                    </p>
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(post.tokenMintAddress!);
@@ -355,21 +321,26 @@ function TokenDetailsPage() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-wrap gap-3">
                 <div>
                   <p className="text-[10px] text-white/30 mb-0.5">Symbol</p>
                   <p className="text-xs font-semibold text-white">{post.tokenSymbol}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-white/30 mb-0.5">FDV</p>
-                  <p className="text-xs font-semibold text-white">{dex?.fdv ? fmt(dex.fdv) : "—"}</p>
-                </div>
+                {dex?.fdv ? (
+                  <div>
+                    <p className="text-[10px] text-white/30 mb-0.5">FDV</p>
+                    <p className="text-xs font-semibold text-white">{fmt(dex.fdv)}</p>
+                  </div>
+                ) : null}
               </div>
             </div>
 
             {/* Original post */}
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2.5">
-              <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Source Post</p>
+              <div className="flex items-center gap-1.5">
+                <svg className="h-3.5 w-3.5 text-[#FF4500]" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+                <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Source Post</p>
+              </div>
               <p className="text-sm font-medium text-white leading-snug line-clamp-2">{post.title}</p>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/40">
                 <span>r/{post.subreddit}</span>
@@ -385,9 +356,10 @@ function TokenDetailsPage() {
                   href={post.redditUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-[#E8431C] hover:text-[#FF5535] transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#FF4500]/10 hover:bg-[#FF4500]/20 border border-[#FF4500]/25 hover:border-[#FF4500]/50 px-3 py-1.5 text-xs font-semibold text-[#FF4500] transition-all"
                 >
-                  View on Reddit <ExternalLink className="h-3 w-3" />
+                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+                  View on Reddit
                 </a>
               )}
             </div>
