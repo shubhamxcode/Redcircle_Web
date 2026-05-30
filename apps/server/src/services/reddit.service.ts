@@ -28,6 +28,18 @@ export interface RedditPost {
   };
 }
 
+export interface TrendingRedditPost {
+  id: string;
+  title: string;
+  author: string;
+  subreddit: string;
+  redditUrl: string;
+  thumbnail: string | null;
+  upvotes: number;
+  numComments: number;
+  createdUtc: number;
+}
+
 export interface RedditApiResponse {
   kind: string;
   data: {
@@ -262,6 +274,62 @@ export class RedditService {
     if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     return 'just now';
+  }
+
+  /**
+   * Fetch hot/trending posts from a given subreddit listing
+   */
+  static async fetchHotPosts(subreddit = "popular", limit = 25): Promise<TrendingRedditPost[]> {
+    const accessToken = await this.getAccessToken();
+
+    let response;
+    if (accessToken) {
+      response = await fetch(
+        `${this.OAUTH_BASE_URL}/r/${subreddit}/hot?limit=${limit}&raw_json=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "User-Agent": this.USER_AGENT,
+          },
+        },
+      );
+    } else {
+      response = await fetch(
+        `${this.BASE_URL}/r/${subreddit}/hot.json?limit=${limit}&raw_json=1`,
+        { headers: { "User-Agent": this.USER_AGENT } },
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(`Reddit API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as {
+      data: { children: Array<{ data: Record<string, any> }> };
+    };
+
+    return data.data.children.map(({ data: p }) => {
+      let thumbnail: string | null = null;
+      if (p.preview?.images?.[0]?.source?.url) {
+        thumbnail = p.preview.images[0].source.url.replace(/&amp;/g, "&");
+      } else if (p.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(p.url)) {
+        thumbnail = p.url;
+      } else if (p.thumbnail && /^https?:/i.test(p.thumbnail)) {
+        thumbnail = p.thumbnail;
+      }
+
+      return {
+        id: p.id as string,
+        title: p.title as string,
+        author: p.author as string,
+        subreddit: p.subreddit as string,
+        redditUrl: `https://reddit.com${p.permalink as string}`,
+        thumbnail,
+        upvotes: (p.ups as number) || 0,
+        numComments: (p.num_comments as number) || 0,
+        createdUtc: p.created_utc as number,
+      };
+    });
   }
 
   /**

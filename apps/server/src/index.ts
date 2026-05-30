@@ -2,6 +2,7 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { startPriceSyncJob } from "./jobs/priceSync";
+import { startTrendingSyncJob } from "./jobs/trendingSync";
 import redditAuthRoutes from "./config/reddit-oauth-simple";
 import postsRoutes from "./routes/posts";
 import portfolioRoutes from "./routes/portfolio";
@@ -11,6 +12,7 @@ import priceHistoryRoutes from "./routes/price-history";
 import waitlistRoutes from "./routes/waitlist";
 import launchesRoutes from "./routes/launches";
 import adminRoutes from "./routes/admin";
+import trendingRoutes from "./routes/trending";
 
 const app = express();
 
@@ -37,6 +39,7 @@ app.use("/api/price-history", priceHistoryRoutes);
 app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/launches", launchesRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/trending", trendingRoutes);
 
 // ── DexScreener proxy (avoids browser CORS restrictions) ──────────────────────
 app.get("/api/tokens/:mint/price", async (req, res) => {
@@ -85,4 +88,5 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 	app.listen(Number(port), () => {
 	console.log(`\nServer running on port ${port}\n`);
 	startPriceSyncJob();
+	startTrendingSyncJob();
 });
