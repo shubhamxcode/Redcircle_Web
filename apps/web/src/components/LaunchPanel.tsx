@@ -435,8 +435,9 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
 
           <div className="p-4 sm:p-6 space-y-6">
 
-            {/* URL input */}
-            <div className={`space-y-3 ${!postPreview ? "max-w-xl mx-auto" : ""}`}>
+            {/* URL input — hidden once post is loaded (step 2+) */}
+            {activeStage === 0 && (
+            <div className="space-y-3 max-w-xl mx-auto">
               <label className="block text-[12px] font-mono uppercase tracking-widest text-white ml-0.5">
                 Reddit Post Link
               </label>
@@ -462,18 +463,29 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
                   }
                 </button>
               </div>
-
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 text-red-400 text-xs bg-red-500/5 border border-red-500/15 px-3 py-2.5 rounded-lg font-mono"
-                >
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {error}
-                </motion.div>
-              )}
             </div>
+            )}
+
+            {/* Back button — shown in step 2 so user can change the post */}
+            {activeStage === 1 && (
+              <button
+                onClick={() => { setPostPreview(null); setStep("idle"); setError(""); setQuote(null); }}
+                className="flex items-center gap-1.5 text-xs font-mono text-white/40 hover:text-white/70 transition-colors cursor-pointer"
+              >
+                <span className="text-base leading-none">←</span> Change post
+              </button>
+            )}
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 text-red-400 text-xs bg-red-500/5 border border-red-500/15 px-3 py-2.5 rounded-lg font-mono"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {error}
+              </motion.div>
+            )}
 
             {/* Post preview + config */}
             <AnimatePresence>
