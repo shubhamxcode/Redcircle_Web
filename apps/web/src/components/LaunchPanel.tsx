@@ -186,7 +186,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
     setError("");
     try {
       setStep("preparing");
-      const prepRes = await fetchWithAuth(`/api/launches/prepare`, {
+      const prepRes = await fetch(`${getApiUrl()}/api/launches/prepare`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -216,7 +216,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
       const signedTxHex = Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString("hex");
 
       setStep("submitting");
-      const subRes = await fetchWithAuth(`/api/launches/submit`, {
+      const subRes = await fetch(`${getApiUrl()}/api/launches/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ launchId: newLaunchId, signedTxHex }),

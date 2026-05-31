@@ -142,7 +142,7 @@ router.get("/quote", async (_req, res) => {
 // 4. Persist launch record
 // 5. Return partially-signed tx hex for the payer (launcher) to sign
 
-router.post("/prepare", authenticateToken, async (req: Request, res: Response) => {
+router.post("/prepare", async (req: Request, res: Response) => {
   try {
     const body = z.object({
       // Reddit source data — passed straight through to Orynth
@@ -159,10 +159,8 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       imageUrl:           z.string().url().optional(),
     }).parse(req.body);
 
-    const userId = (req as any).userId as string;
-
-    // externalId = stable idempotency key per (reddit post, launcher)
-    const externalId = `redcircle:${body.redditPostId}:${userId}`;
+    // Use wallet address as the launcher identifier — no Redcircle account needed
+    const externalId = `redcircle:${body.redditPostId}:${body.payerWalletAddress}`;
 
     // Idempotency check — return existing non-failed launch
     const [existing] = await db.select().from(launches)
@@ -219,7 +217,7 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
     const [launch] = await db.insert(launches).values({
       externalId,
       orynthLaunchId:        orynthLaunch.id,
-      launcherId:            userId,
+      launcherId:            null,
       sourcePlatform:        "reddit",
       sourceId:              body.redditPostId,
       sourceUrl:             body.redditUrl,
@@ -276,7 +274,7 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
 // Payer wallet has signed the tx on the frontend.
 // We receive the fully-signed tx hex and submit it to Orynth.
 
-router.post("/submit", authenticateToken, async (req: Request, res: Response) => {
+router.post("/submit", async (req: Request, res: Response) => {
   let launchId: string | undefined;
   try {
     const body = z.object({
