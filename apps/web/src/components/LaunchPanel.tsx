@@ -227,7 +227,13 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
       setStep("polling");
       toast.success("Transaction submitted! Waiting for confirmation…");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Launch failed");
+      const msg = err instanceof Error ? err.message : "Launch failed";
+      // Blockhash expired — transaction took too long, just retry
+      if (msg.toLowerCase().includes("blockhash not found") || msg.toLowerCase().includes("blockhash")) {
+        setError("Transaction expired — please click Launch again immediately to retry.");
+      } else {
+        setError(msg);
+      }
       setStep("error");
     }
   };
