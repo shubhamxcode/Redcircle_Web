@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, asc, and, gte, ilike, inArray, or } from "drizzle-orm";
+import { eq, desc, asc, and, gte, ilike, inArray, or, sql } from "drizzle-orm";
 import { getEarnings } from "../services/orynth.service";
 
 const { posts, launches } = schema;
@@ -424,12 +424,27 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Accept UUID, mint address (CA), or token symbol (case-insensitive)
-    const [post] = await db
-      .select()
-      .from(posts)
-      .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id)))
-      .limit(1);
+    // Try slug format: {symbol}-{shortMint} e.g. "doge-gllbyh"
+    // shortMint is always exactly 6 chars — guards against UUIDs which also contain dashes
+    let post: typeof posts.$inferSelect | undefined;
+    const dashIdx = id.lastIndexOf("-");
+    if (dashIdx > 0) {
+      const sym       = id.slice(0, dashIdx);
+      const shortMint = id.slice(dashIdx + 1);
+      if (shortMint.length === 6) {
+        const [bySlug] = await db.select().from(posts)
+          .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`)))
+          .limit(1);
+        post = bySlug;
+      }
+    }
+    // Fall back: UUID, full mint address, or symbol-only (for on-chain metadata links)
+    if (!post) {
+      const [byOther] = await db.select().from(posts)
+        .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id)))
+        .limit(1);
+      post = byOther;
+    }
 
     if (!post) {
       return res.status(404).json({ error: "Post not found" });
@@ -456,9 +471,22 @@ router.get("/:id/creator-earnings", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Accept UUID, mint address, or token symbol
-    const [post] = await db.select().from(posts)
-      .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id))).limit(1);
+    // Accept slug, UUID, mint address, or symbol
+    let post: typeof posts.$inferSelect | undefined;
+    const dashIdx = id.lastIndexOf("-");
+    if (dashIdx > 0) {
+      const sym = id.slice(0, dashIdx), shortMint = id.slice(dashIdx + 1);
+      if (shortMint.length === 6) {
+        const [r] = await db.select().from(posts)
+          .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`))).limit(1);
+        post = r;
+      }
+    }
+    if (!post) {
+      const [r] = await db.select().from(posts)
+        .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id))).limit(1);
+      post = r;
+    }
     if (!post) return res.status(404).json({ success: false, error: "Post not found" });
 
     // Look up the launch by mint address or reddit post id

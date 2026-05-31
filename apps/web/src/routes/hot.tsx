@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useHotPosts, type HotPost } from "@/hooks/useHotPosts";
+import { tokenSlug } from "@/lib/utils";
 
 export const Route = createFileRoute("/hot")({
   component: HotPage,
@@ -245,7 +246,7 @@ function AlreadyLaunchedModal({
           </button>
           {tokenInfo?.postId && (
             <button
-              onClick={() => navigate({ to: "/token/$tokenId", params: { tokenId: tokenInfo.tokenSymbol?.toLowerCase() ?? tokenInfo.mintAddress ?? tokenInfo.postId } })}
+              onClick={() => navigate({ to: "/token/$tokenId", params: { tokenId: tokenSlug(tokenInfo.tokenSymbol, tokenInfo.mintAddress) || tokenInfo.postId } })}
               className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl text-xs sm:text-sm font-semibold text-white py-2.5 transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-500"
             >
               <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
