@@ -6,6 +6,7 @@ export interface TokenInfo {
   tokenSymbol: string | null;
   mintAddress: string | null;
   status: string;
+  // tokenSymbol already present — used for URL routing
 }
 
 export interface HotPost {

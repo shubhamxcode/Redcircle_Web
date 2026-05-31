@@ -84,7 +84,7 @@ export default function FeedCard({ post, className, index = 0 }: FeedCardProps) 
   const isNew = Date.now() - new Date(post.createdAt).getTime() < 24 * 60 * 60 * 1000;
 
   return (
-    <Link to="/token/$tokenId" params={{ tokenId: post.id }}>
+    <Link to="/token/$tokenId" params={{ tokenId: post.tokenSymbol?.toLowerCase() ?? post.tokenMintAddress ?? post.id }}>
       <motion.article
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

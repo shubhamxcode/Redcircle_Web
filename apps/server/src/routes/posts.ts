@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, asc, and, gte, ilike, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, gte, ilike, inArray, or } from "drizzle-orm";
 import { getEarnings } from "../services/orynth.service";
 
 const { posts, launches } = schema;
@@ -424,10 +424,11 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Accept UUID, mint address (CA), or token symbol (case-insensitive)
     const [post] = await db
       .select()
       .from(posts)
-      .where(eq(posts.id, id))
+      .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id)))
       .limit(1);
 
     if (!post) {
@@ -455,8 +456,9 @@ router.get("/:id/creator-earnings", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the confirmed launch for this post (by postId or redditPostId)
-    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    // Accept UUID, mint address, or token symbol
+    const [post] = await db.select().from(posts)
+      .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id))).limit(1);
     if (!post) return res.status(404).json({ success: false, error: "Post not found" });
 
     // Look up the launch by mint address or reddit post id
