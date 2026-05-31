@@ -324,6 +324,53 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
           {/* Terminal header */}
           <TerminalHeader />
 
+          {/* Fetching overlay */}
+          <AnimatePresence>
+            {step === "fetching" && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#080808]/90 backdrop-blur-sm rounded-2xl"
+              >
+                {/* Mascot — whole group bounces together so rings stay symmetric */}
+                <motion.div
+                  animate={{ y: [0, -6, 0] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                  className="relative flex items-center justify-center mb-5"
+                >
+                  {/* Outer pulse rings */}
+                  <motion.div
+                    animate={{ scale: [1, 1.6, 1], opacity: [0.25, 0, 0.25] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute w-28 h-28 rounded-full border border-[#E8431C]/30"
+                  />
+                  <motion.div
+                    animate={{ scale: [1, 1.35, 1], opacity: [0.35, 0, 0.35] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                    className="absolute w-20 h-20 rounded-full border border-[#E8431C]/40"
+                  />
+                  {/* Spinning orbit ring */}
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    className="absolute w-16 h-16 rounded-full border border-dashed border-[#E8431C]/20"
+                  />
+                  <img
+                    src="/favicon-circle.png"
+                    alt="Redcircle"
+                    className="w-12 h-12 relative z-10 drop-shadow-[0_0_12px_rgba(232,67,28,0.6)]"
+                  />
+                </motion.div>
+
+                <p className="text-white font-mono font-semibold text-base tracking-wide">
+                  Fetching Reddit post
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Progress bar */}
           <div className="px-6 pt-5 pb-3">
             <div className="flex items-start gap-0">

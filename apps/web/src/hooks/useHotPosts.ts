@@ -21,24 +21,37 @@ export interface HotPost {
   tokenInfo?: TokenInfo;
 }
 
-export function useHotPosts() {
+export interface Category {
+  id: string;
+  label: string;
+}
+
+export function useHotPosts(category = "all") {
   const [posts, setPosts] = useState<HotPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  // Fetch category list once
+  useEffect(() => {
+    fetch(`${getApiUrl()}/api/trending/categories`)
+      .then((r) => r.json())
+      .then((d: { categories: Category[] }) => setCategories(d.categories))
+      .catch(() => {});
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const api = getApiUrl();
-      const res = await fetch(`${api}/api/trending`);
+      const res = await fetch(`${api}/api/trending?category=${encodeURIComponent(category)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { posts?: HotPost[]; cachedAt?: string };
       const rawPosts: HotPost[] = data.posts ?? [];
       setCachedAt(data.cachedAt ? new Date(data.cachedAt).getTime() : Date.now());
 
-      // Check which posts have already been tokenized on the platform
       let tokenized: Record<string, TokenInfo> = {};
       if (rawPosts.length > 0) {
         try {
@@ -53,30 +66,21 @@ export function useHotPosts() {
             tokenized = chkData.tokenized ?? {};
           }
         } catch {
-          // Non-fatal — continue without tokenization info
+          // non-fatal
         }
       }
 
-      setPosts(rawPosts.map((p) => ({
-        ...p,
-        tokenInfo: tokenized[p.id] ?? undefined,
-      })));
+      setPosts(rawPosts.map((p) => ({ ...p, tokenInfo: tokenized[p.id] ?? undefined })));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load trending posts");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [category]);
 
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
 
-  return {
-    posts,
-    loading,
-    error,
-    cachedAt,
-    refresh: fetchPosts,
-  };
+  return { posts, loading, error, cachedAt, categories, refresh: fetchPosts };
 }

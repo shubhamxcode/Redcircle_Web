@@ -266,7 +266,8 @@ function AlreadyLaunchedModal({
 }
 
 function HotPage() {
-  const { posts, loading, error, cachedAt, refresh } = useHotPosts();
+  const [activeCategory, setActiveCategory] = useState("all");
+  const { posts, loading, error, cachedAt, categories, refresh } = useHotPosts(activeCategory);
   const [showToast, setShowToast] = useState(true);
   const [selectedPost, setSelectedPost] = useState<HotPost | null>(null);
   const navigate = useNavigate();
@@ -321,6 +322,25 @@ function HotPage() {
             </button>
           </div>
         </div>
+
+        {/* Category filters */}
+        {categories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 mb-4 sm:mb-5 scrollbar-none">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => { setActiveCategory(cat.id); }}
+                className={`flex-shrink-0 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all cursor-pointer border ${
+                  activeCategory === cat.id
+                    ? "bg-[#E8431C] border-[#E8431C] text-white"
+                    : "border-white/10 text-white/50 hover:text-white hover:border-white/25"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Post list card */}
         <div className="rounded-xl sm:rounded-2xl border border-white/8 bg-white/[0.02] overflow-hidden">

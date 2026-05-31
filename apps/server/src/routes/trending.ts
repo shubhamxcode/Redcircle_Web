@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  CATEGORIES,
   getCachedTrendingPosts,
   refreshTrendingCache,
   isCacheStale,
@@ -7,22 +8,22 @@ import {
 
 const router = Router();
 
-/**
- * GET /api/trending
- * Returns cached hot Reddit posts (refreshed every 3 hours by background job).
- * Falls back to an on-demand refresh if the cache is stale.
- */
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    if (isCacheStale()) {
-      await refreshTrendingCache();
+    const category = typeof req.query.category === "string" && CATEGORIES[req.query.category]
+      ? req.query.category
+      : "all";
+
+    if (isCacheStale(category)) {
+      await refreshTrendingCache(category);
     }
 
-    const { posts, cachedAt, nextRefreshAt } = getCachedTrendingPosts();
+    const { posts, cachedAt, nextRefreshAt } = getCachedTrendingPosts(category);
 
     res.json({
       success: true,
       posts,
+      category,
       count: posts.length,
       cachedAt: cachedAt ? new Date(cachedAt).toISOString() : null,
       nextRefreshAt: new Date(nextRefreshAt).toISOString(),
@@ -31,6 +32,13 @@ router.get("/", async (_req, res) => {
     console.error("❌ Error serving trending posts:", error);
     res.status(500).json({ success: false, error: "Failed to fetch trending posts" });
   }
+});
+
+// Expose category list so the client doesn't need to hardcode them
+router.get("/categories", (_req, res) => {
+  res.json({
+    categories: Object.entries(CATEGORIES).map(([id, { label }]) => ({ id, label })),
+  });
 });
 
 export default router;
