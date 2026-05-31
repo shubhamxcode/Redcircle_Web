@@ -167,7 +167,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       .where(eq(launches.externalId, externalId))
       .limit(1);
 
-    if (existing && existing.status !== "failed") {
+    if (existing && existing.status !== "failed" && existing.preparedTxHex) {
       return res.json({
         success: true,
         launchId:             existing.id,
