@@ -90,6 +90,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
   const [launchId, setLaunchId]     = useState<string | null>(null);
   const [mintAddress, setMintAddress] = useState<string | null>(null);
   const [rocketGone, setRocketGone] = useState(false);
+  const [fetchLabel, setFetchLabel] = useState("Fetching Reddit post");
 
 
   const activeStage = getActiveStage(step);
@@ -125,6 +126,12 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
       return () => clearTimeout(t);
     }
     setRocketGone(false);
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== "fetching") { setFetchLabel("Fetching Reddit post"); return; }
+    const t = setTimeout(() => setFetchLabel("Generating Token Details"), 3000);
+    return () => clearTimeout(t);
   }, [step]);
 
   // Auto-fetch only when arriving from the hot page (initialUrl set via sessionStorage)
@@ -364,9 +371,18 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
                   />
                 </motion.div>
 
-                <p className="text-white font-mono font-semibold text-base tracking-wide">
-                  Fetching Reddit post
-                </p>
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={fetchLabel}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.3 }}
+                    className="text-white font-mono font-semibold text-base tracking-wide"
+                  >
+                    {fetchLabel}
+                  </motion.p>
+                </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>
