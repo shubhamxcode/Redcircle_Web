@@ -127,6 +127,13 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
     setRocketGone(false);
   }, [step]);
 
+  // Auto-fetch only when arriving from the hot page (initialUrl set via sessionStorage)
+  // On refresh, sessionStorage is already cleared so initialUrl is undefined — no auto-fetch
+  useEffect(() => {
+    if (initialUrl) handleFetchPost();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleFetchPost = async () => {
     const targetUrl = url;
     if (!targetUrl) return;

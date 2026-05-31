@@ -48,19 +48,42 @@ function HotPopup({ onDismiss }: { onDismiss: () => void }) {
   }, [onDismiss]);
 
   return (
-    <div
-      className={`fixed top-20 right-2 sm:right-4 z-50 w-[calc(100vw-1rem)] sm:w-80 max-w-xs sm:max-w-sm pointer-events-none transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"}`}
-    >
-      <div className="rounded-2xl border border-orange-500/30 bg-[#111] shadow-2xl px-4 sm:px-5 py-4">
-        <div className="flex items-center gap-2.5 mb-2.5">
-          <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400 flex-shrink-0" />
-          <p className="text-xs sm:text-sm font-semibold text-white">Hot &amp; Trending Posts</p>
+    <>
+      {/* Mobile: bottom-center sheet */}
+      <div
+        className={`sm:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm pointer-events-auto transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-100 translate-y-4"}`}
+      >
+        <div className="rounded-2xl border border-orange-500/30 bg-[#111] shadow-2xl px-4 py-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <Flame className="w-4 h-4 text-orange-400 flex-shrink-0" />
+              <p className="text-xs font-semibold text-white">Hot &amp; Trending Posts</p>
+            </div>
+            <button onClick={onDismiss} className="text-white/30 hover:text-white transition-colors cursor-pointer p-1 -mr-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-white/60 leading-relaxed">
+            These are today's hottest posts from Reddit — content already going viral. Use them to launch a token on Redcircle for the highest chance of explosive growth.
+          </p>
         </div>
-        <p className="text-xs sm:text-sm text-white/60 leading-relaxed">
-          These are today's hottest posts from Reddit — content already going viral. Use them to launch a token on Redcircle for the highest chance of explosive growth.
-        </p>
       </div>
-    </div>
+
+      {/* Desktop: top-right toast */}
+      <div
+        className={`hidden sm:block fixed top-20 right-4 z-50 w-80 pointer-events-none transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"}`}
+      >
+        <div className="rounded-2xl border border-orange-500/30 bg-[#111] shadow-2xl px-5 py-4">
+          <div className="flex items-center gap-2.5 mb-2.5">
+            <Flame className="w-5 h-5 text-orange-400 flex-shrink-0" />
+            <p className="text-sm font-semibold text-white">Hot &amp; Trending Posts</p>
+          </div>
+          <p className="text-sm text-white/60 leading-relaxed">
+            These are today's hottest posts from Reddit — content already going viral. Use them to launch a token on Redcircle for the highest chance of explosive growth.
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
 
