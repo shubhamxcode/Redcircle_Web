@@ -51,7 +51,7 @@ export interface PrepareResponse {
     id: string;
     status: LaunchStatus;
     preparedTxHex: string;
-    requiredSigners: string[];        // e.g. ["payer", "poolCreator"]
+    requiredSigners: string[];        // ["payer", "poolCreator"]
     feeConfig: FeeConfig;
   };
 }
@@ -102,14 +102,14 @@ async function orynthFetch<T>(path: string, options: RequestInit = {}): Promise<
 
 // ─── Quote ───────────────────────────────────────────────────────────────────
 // GET /api/v1/launches/quote
-// Returns required SOL, fee split, and signer requirements before a user starts.
 
 export interface QuoteResponse {
   partner: {
     id: string;
     name: string;
     slug: string;
-    feeWalletAddress: string;
+    poolCreatorWalletAddress: string;
+    claimReceiverWalletAddress: string;
   };
   launchCost: {
     requiredSol: number;
@@ -135,7 +135,6 @@ export async function getQuote(): Promise<QuoteResponse> {
 
 // ─── Prepare ─────────────────────────────────────────────────────────────────
 // POST /api/v1/launches/prepare
-// Builds the DBC launch transaction. Returns preparedTxHex for payer + partner signatures.
 
 export async function prepareLaunch(req: PrepareRequest): Promise<PrepareResponse> {
   return orynthFetch<PrepareResponse>("/api/v1/launches/prepare", {
@@ -145,12 +144,12 @@ export async function prepareLaunch(req: PrepareRequest): Promise<PrepareRespons
 }
 
 // ─── Sign as poolCreator ─────────────────────────────────────────────────────
-// Partial-signs the prepared tx with our ORYNTH_PARTNER_FEE_WALLET private key.
+// Partial-signs the prepared tx with ORYNTH_POOL_CREATOR_WALLET private key.
 // Private key never leaves the server.
 
 export function signAsPoolCreator(preparedTxHex: string): string {
-  const privKeyB58 = process.env.ORYNTH_PARTNER_FEE_WALLET;
-  if (!privKeyB58) throw new Error("ORYNTH_PARTNER_FEE_WALLET not configured");
+  const privKeyB58 = process.env.ORYNTH_POOL_CREATOR_WALLET;
+  if (!privKeyB58) throw new Error("ORYNTH_POOL_CREATOR_WALLET not configured");
 
   const keypair = Keypair.fromSecretKey(bs58.decode(privKeyB58));
   const tx = Transaction.from(Buffer.from(preparedTxHex, "hex"));
@@ -161,8 +160,6 @@ export function signAsPoolCreator(preparedTxHex: string): string {
 
 // ─── Submit ──────────────────────────────────────────────────────────────────
 // POST /api/v1/launches/submit
-// Accepts launchId + fully-signed txHex. Orynth validates against the prepared message
-// (preventing fee-recipient tampering) and broadcasts.
 
 export async function submitLaunch(launchId: string, signedTxHex: string) {
   return orynthFetch<{ success: boolean }>("/api/v1/launches/submit", {
@@ -173,7 +170,6 @@ export async function submitLaunch(launchId: string, signedTxHex: string) {
 
 // ─── Status ──────────────────────────────────────────────────────────────────
 // GET /api/v1/launches/{launchId}
-// Returns prepared|submitted|launched|failed with mint, pool, and signature details.
 
 export async function getLaunchStatus(orynthLaunchId: string): Promise<StatusResponse> {
   return orynthFetch<StatusResponse>(`/api/v1/launches/${orynthLaunchId}`);
@@ -181,7 +177,6 @@ export async function getLaunchStatus(orynthLaunchId: string): Promise<StatusRes
 
 // ─── Earnings ─────────────────────────────────────────────────────────────────
 // GET /api/v1/earnings?poolAddress=A&poolAddress=B
-// Returns claimable partner earnings per pool.
 
 export interface PoolEarning {
   launchId?: string;
@@ -213,9 +208,11 @@ export async function getEarnings(poolAddresses: string[]): Promise<EarningsResp
 }
 
 // ─── Earnings claim ───────────────────────────────────────────────────────────
-// POST /api/v1/earnings/claim/prepare  → returns claim id + preparedTxHex per pool
-// Sign with ORYNTH_PARTNER_FEE_WALLET (server-side only)
-// POST /api/v1/earnings/claim/submit   → broadcasts signed tx
+// Flow:
+// 1. POST /api/v1/earnings/claim/prepare  → claimBatchId + txHex per pool
+// 2. Sign each txHex with ORYNTH_POOL_CREATOR_WALLET (poolCreator signer, server-side only)
+//    claimReceiverWalletAddress does NOT sign — USDC is sent there automatically
+// 3. POST /api/v1/earnings/claim/submit   → broadcasts signed txs
 
 export interface ClaimTransaction {
   poolAddress: string;
@@ -261,25 +258,18 @@ export async function submitEarningsClaim(
   claimBatchId: string,
   signedTransactions: { poolAddress: string; signedTxHex: string }[],
 ): Promise<ClaimSubmitResponse> {
-  // Orynth submit expects `signedTransactions` with `signedTxHex` per entry
-  const payload = {
-    claimBatchId,
-    signedTransactions: signedTransactions.map(({ poolAddress, signedTxHex }) => ({
-      poolAddress,
-      signedTxHex,
-    })),
-  };
   return orynthFetch<ClaimSubmitResponse>("/api/v1/earnings/claim/submit", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ claimBatchId, signedTransactions }),
   });
 }
 
-// Signs a prepared claim tx with the partner fee wallet (same key used as pool creator).
-// Returns the signed tx hex. Private key never leaves the server.
+// Signs a claim tx with ORYNTH_POOL_CREATOR_WALLET (same signer used for launches).
+// claimReceiverWalletAddress (ORYNTH_CLAIM_RECEIVER_WALLET) does not sign —
+// Orynth sends USDC directly to it as configured in the partner setup.
 export function signClaimTx(preparedTxHex: string): string {
-  const privKeyB58 = process.env.ORYNTH_PARTNER_FEE_WALLET;
-  if (!privKeyB58) throw new Error("ORYNTH_PARTNER_FEE_WALLET not configured");
+  const privKeyB58 = process.env.ORYNTH_POOL_CREATOR_WALLET;
+  if (!privKeyB58) throw new Error("ORYNTH_POOL_CREATOR_WALLET not configured");
 
   const keypair = Keypair.fromSecretKey(bs58.decode(privKeyB58));
   const tx = Transaction.from(Buffer.from(preparedTxHex, "hex"));
@@ -288,15 +278,12 @@ export function signClaimTx(preparedTxHex: string): string {
 }
 
 // ─── Webhook signature verification ──────────────────────────────────────────
-// Orynth signs payloads with HMAC-SHA256 using your webhook secret.
-// Header: x-orynth-signature
 
 export function verifyWebhookSignature(rawBody: string, signature: string): boolean {
   const secret = process.env.ORYNTH_WEBHOOK_SECRET;
   if (!secret) return false;
 
   const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
-  // Constant-time compare
   try {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
   } catch {
