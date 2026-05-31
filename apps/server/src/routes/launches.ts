@@ -30,7 +30,7 @@ function subredditFromUrl(url: string): string {
 }
 
 async function syncLaunchToFeed(launch: LaunchRow) {
-  if (!launch.mintAddress || !launch.launcherId) return;
+  if (!launch.mintAddress) return;
   try {
     await db.insert(posts).values({
       ...(launch.postId ? { id: launch.postId } : {}),
@@ -49,7 +49,7 @@ async function syncLaunchToFeed(launch: LaunchRow) {
       tokenSymbol:      launch.tokenSymbol,
       description:      launch.tokenDescription ?? undefined,
       status:           "active",
-      creatorId:        launch.launcherId,
+      creatorId:        launch.launcherId ?? null,
     }).onConflictDoUpdate({
       target: posts.redditPostId,
       set: {

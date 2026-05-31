@@ -47,7 +47,7 @@ export const posts = pgTable("posts", {
   holders: integer("holders").default(0).notNull(), // Number of unique token holders
   
   // Creator/Curator Info
-  creatorId: uuid("creator_id").references(() => users.id).notNull(), // User who tokenized this post
+  creatorId: uuid("creator_id").references(() => users.id), // null for wallet-only launches
   creatorRewards: numeric("creator_rewards", { precision: 18, scale: 9 }).default("0").notNull(), // Rewards earned
   
   // Metadata
