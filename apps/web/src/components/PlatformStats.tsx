@@ -20,7 +20,7 @@ export default function PlatformStats() {
 
   useEffect(() => {
     const apiUrl = getApiUrl();
-    fetch(`${apiUrl}/api/posts?status=all&sortBy=upvotes&limit=100`)
+    fetch(`${apiUrl}/api/posts?status=active&sortBy=upvotes&limit=100`)
       .then((r) => r.json())
       .then((data) => {
         const posts = data.posts ?? [];

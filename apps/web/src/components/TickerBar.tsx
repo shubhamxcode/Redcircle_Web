@@ -43,7 +43,7 @@ export default function TickerBar() {
 
   useEffect(() => {
     const apiUrl = getApiUrl();
-    fetch(`${apiUrl}/api/posts?status=all&sortBy=upvotes&limit=30`)
+    fetch(`${apiUrl}/api/posts?status=active&sortBy=upvotes&limit=30`)
       .then((r) => r.json())
       .then(async (data) => {
         const posts: TickerToken[] = (data.posts ?? [])

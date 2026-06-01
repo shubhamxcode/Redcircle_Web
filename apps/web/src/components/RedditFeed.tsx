@@ -194,7 +194,7 @@ export default function RedditFeed() {
 
         let url = hasSearchParams
           ? `${apiUrl}/api/posts/search?sortBy=${field}&order=${order}&`
-          : `${apiUrl}/api/posts?status=all&sortBy=${field}&order=${order}&`;
+          : `${apiUrl}/api/posts?status=active&sortBy=${field}&order=${order}&`;
 
         url += `limit=20&offset=${useOffset}`;
         if (time && time !== "all") url += `&since=${time}`;
