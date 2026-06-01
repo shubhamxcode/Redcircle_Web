@@ -2,7 +2,6 @@ import express, { type Request, type Response } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
-import rateLimit from "express-rate-limit";
 import { db } from "../db";
 import { launches, posts } from "../db";
 import { authenticateToken } from "../middleware/auth";
@@ -11,16 +10,6 @@ import { broadcastLaunch } from "../services/ws.service";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router: express.Router = express.Router();
-
-// 1 launch per IP per 15 minutes
-const launchRateLimit = rateLimit({
-  windowMs:        15 * 60 * 1000,
-  limit:           1,
-  standardHeaders: "draft-7",
-  legacyHeaders:   false,
-  message:         { success: false, error: "You can only launch one token every 15 minutes. Please wait and try again." },
-  keyGenerator:    (req) => req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ?? req.ip ?? "unknown",
-});
 
 type LaunchRow = typeof launches.$inferSelect;
 type DbStatus = LaunchRow["status"];
@@ -180,7 +169,7 @@ router.get("/quote", async (_req, res) => {
 // 4. Submit fully-signed tx to Orynth
 // 5. Persist launch record, return launchId for status polling
 
-router.post("/prepare", launchRateLimit, async (req: Request, res: Response) => {
+router.post("/prepare", async (req: Request, res: Response) => {
   try {
     const body = z.object({
       redditPostId:    z.string().min(1),
