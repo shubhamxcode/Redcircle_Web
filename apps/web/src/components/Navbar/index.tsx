@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
-import { Menu, X, LogOut, UserRound } from "lucide-react";
+import { Menu, X, LogOut, UserRound, Flame } from "lucide-react";
 
 const navLinks = [
   { label: "Feed", to: "/home" },
   { label: "Leaderboard", to: "/leaderboard" },
+  { label: "Hot", to: "/hot", icon: Flame },
 ];
 
 function Avatar({ src, alt, className }: { src?: string | null; alt: string; className: string }) {
@@ -23,6 +24,19 @@ function Avatar({ src, alt, className }: { src?: string | null; alt: string; cla
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  const handleFeedClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenuOpen(false);
+    if (pathname === "/home") {
+      document.getElementById("feed")?.scrollIntoView({ behavior: "smooth" });
+    } else {
+      sessionStorage.setItem("scrollToFeed", "1");
+      navigate({ to: "/home" });
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-[60]">
@@ -46,9 +60,11 @@ export default function Navbar() {
               <Link
                 key={link.to}
                 to={link.to}
-                className="text-sm text-white/70 hover:text-white transition-colors"
-                activeProps={{ className: "text-sm text-white font-semibold" }}
+                onClick={link.label === "Feed" ? handleFeedClick : undefined}
+                className="flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors"
+                activeProps={{ className: "flex items-center gap-1.5 text-sm text-white font-semibold" }}
               >
+                {link.icon && <link.icon className="w-3.5 h-3.5 text-orange-400" />}
                 {link.label}
               </Link>
             ))}
@@ -122,10 +138,11 @@ export default function Navbar() {
             <Link
               key={link.to}
               to={link.to}
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center h-11 px-3 rounded-xl text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-              activeProps={{ className: "flex items-center h-11 px-3 rounded-xl text-sm text-white font-semibold bg-white/8" }}
+              onClick={link.label === "Feed" ? handleFeedClick : () => setMenuOpen(false)}
+              className="flex items-center gap-2 h-11 px-3 rounded-xl text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+              activeProps={{ className: "flex items-center gap-2 h-11 px-3 rounded-xl text-sm text-white font-semibold bg-white/8" }}
             >
+              {link.icon && <link.icon className="w-4 h-4 text-orange-400" />}
               {link.label}
             </Link>
           ))}

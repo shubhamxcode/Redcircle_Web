@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import LaunchPanel from "@/components/LaunchPanel";
 import RedditFeed from "@/components/RedditFeed";
@@ -33,6 +33,16 @@ export const Route = createFileRoute("/home")({
 });
 
 function HomeComponent() {
+  const initialUrl = sessionStorage.getItem("hotLaunchUrl") || undefined;
+  if (initialUrl) sessionStorage.removeItem("hotLaunchUrl");
+
+  useEffect(() => {
+    if (sessionStorage.getItem("scrollToFeed")) {
+      sessionStorage.removeItem("scrollToFeed");
+      document.getElementById("feed")?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
   return (
     <div className="relative min-h-screen bg-black">
       {/* Dot-grid background */}
@@ -88,13 +98,15 @@ function HomeComponent() {
 
         {/* Launch widget */}
         <div className="mb-12 sm:mb-20">
-          <LaunchPanel />
+          <LaunchPanel initialUrl={initialUrl || undefined} />
         </div>
 
         <div className="mb-8 sm:mb-10" />
 
         {/* Feed */}
-        <RedditFeed />
+        <div id="feed" className="scroll-mt-20">
+          <RedditFeed />
+        </div>
       </div>
 
       <AnimatedFooter />

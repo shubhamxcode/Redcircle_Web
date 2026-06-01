@@ -72,7 +72,7 @@ router.post("/sync", async (_req: Request, res: Response) => {
         await db.update(launches).set(updates).where(eq(launches.id, launch.id));
 
         // Sync to feed if newly confirmed
-        if (newStatus === "confirmed" && launch.mintAddress && launch.launcherId) {
+        if (newStatus === "confirmed" && launch.mintAddress) {
           try {
             await db.insert(posts).values({
               redditPostId:     launch.sourceId,
@@ -90,7 +90,7 @@ router.post("/sync", async (_req: Request, res: Response) => {
               tokenSymbol:      launch.tokenSymbol,
               description:      launch.tokenDescription ?? undefined,
               status:           "active",
-              creatorId:        launch.launcherId,
+              creatorId:        launch.launcherId ?? null,
             }).onConflictDoUpdate({
               target: posts.redditPostId,
               set: { tokenMintAddress: launch.mintAddress, status: "active", updatedAt: new Date() },

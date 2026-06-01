@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { db } from "../db";
 import { launches, posts } from "../db";
 import { authenticateToken } from "../middleware/auth";
@@ -31,9 +32,10 @@ function subredditFromUrl(url: string): string {
 }
 
 async function syncLaunchToFeed(launch: LaunchRow) {
-  if (!launch.mintAddress || !launch.launcherId) return;
+  if (!launch.mintAddress) return;
   try {
     await db.insert(posts).values({
+      ...(launch.postId ? { id: launch.postId } : {}),
       redditPostId:     launch.sourceId,
       redditUrl:        launch.sourceUrl,
       title:            launch.sourceTitle,
@@ -47,20 +49,21 @@ async function syncLaunchToFeed(launch: LaunchRow) {
       currentPrice:     "0",
       tokenMintAddress: launch.mintAddress,
       tokenSymbol:      launch.tokenSymbol,
+      tokenSlug:        launch.tokenSlug ?? undefined,
       description:      launch.tokenDescription ?? undefined,
       status:           "active",
-      creatorId:        launch.launcherId,
+      creatorId:        launch.launcherId ?? null,
     }).onConflictDoUpdate({
       target: posts.redditPostId,
       set: {
         tokenMintAddress: launch.mintAddress,
         tokenSymbol:      launch.tokenSymbol,
+        tokenSlug:        launch.tokenSlug ?? undefined,
         status:           "active",
         updatedAt:        new Date(),
       },
     });
   } catch (e) {
-    console.warn("Could not sync launch to posts feed:", e);
   }
 }
 
@@ -141,7 +144,6 @@ Respond with valid JSON only, no markdown:
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED");
-    console.error("Gemini suggest-name error:", isQuota ? "quota exceeded" : msg);
     // Return 200 with null so the frontend falls back to manual input gracefully
     res.json({ name: null, symbol: null, error: isQuota ? "quota" : "unavailable" });
   }
@@ -166,7 +168,7 @@ router.get("/quote", async (_req, res) => {
 // 4. Persist launch record
 // 5. Return partially-signed tx hex for the payer (launcher) to sign
 
-router.post("/prepare", authenticateToken, async (req: Request, res: Response) => {
+router.post("/prepare", async (req: Request, res: Response) => {
   try {
     const body = z.object({
       // Reddit source data — passed straight through to Orynth
@@ -183,17 +185,17 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       imageUrl:           z.string().url().optional(),
     }).parse(req.body);
 
-    const userId = (req as any).userId as string;
+    // Use wallet address as the launcher identifier — no Redcircle account needed
+    const externalId = `redcircle:${body.redditPostId}:${body.payerWalletAddress}`;
 
-    // externalId = stable idempotency key per (reddit post, launcher)
-    const externalId = `redcircle:${body.redditPostId}:${userId}`;
-
-    // Idempotency check — return existing non-failed launch
+    // Idempotency check — only reuse if the tx is already on-chain.
+    // awaiting_payer_signature records have an expired blockhash (~90s on Solana), so always re-prepare.
     const [existing] = await db.select().from(launches)
       .where(eq(launches.externalId, externalId))
       .limit(1);
 
-    if (existing && existing.status !== "failed") {
+    const ON_CHAIN_STATUSES = new Set<DbStatus>(["submitting", "confirming", "confirmed"]);
+    if (existing && ON_CHAIN_STATUSES.has(existing.status) && existing.preparedTxHex) {
       return res.json({
         success: true,
         launchId:             existing.id,
@@ -203,9 +205,19 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       });
     }
 
+    // If a previous attempt failed at the Orynth level, pass a fresh externalId so Orynth
+    // creates a new launch instead of returning the stale failed record idempotently.
+    const orynthExternalId = existing?.status === "failed"
+      ? `${externalId}:${Date.now()}`
+      : externalId;
+
+    // Reuse the slug from a previous attempt so the URL stays stable across retries.
+    const tokenSlug = existing?.tokenSlug
+      ?? `${body.tokenSymbol.toLowerCase()}-${randomBytes(3).toString("hex")}`;
+
     // Call Orynth /prepare — source has NO `title`, creator has NO `displayName`
     const orynthPayload = {
-      externalId,
+      externalId: orynthExternalId,
       payerWalletAddress: body.payerWalletAddress,
       source: {
         platform: "reddit",
@@ -221,40 +233,29 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       },
       name:        body.tokenName,
       symbol:      body.tokenSymbol.toUpperCase(),
-      description: await (async () => {
-        const base = body.description?.trim() || body.redditTitle;
-        // Look up the Redcircle post UUID to build the token page URL
-        try {
-          const [dbPost] = await db.select({ id: posts.id })
-            .from(posts)
-            .where(eq(posts.redditPostId, body.redditPostId))
-            .limit(1);
-          const tokenPageUrl = dbPost
-            ? `https://redcircle.lol/token/${dbPost.id}`
-            : "https://redcircle.lol";
-          return `${base}\n\n🔴 Redcircle: ${tokenPageUrl}\n📝 Reddit: ${body.redditUrl}`;
-        } catch {
-          return `${base}\n\n📝 Reddit: ${body.redditUrl}`;
-        }
-      })(),
+      description: body.description?.trim() || body.redditTitle,
       imageUrl:    body.imageUrl ?? body.redditThumbnail ?? "https://www.redcircle.lol/logo.png",
+      websiteUrl:  `https://redcircle.lol/token/${tokenSlug}`,
     };
-
-    console.log("🚀 [Launch/prepare] Orynth payload:", JSON.stringify(orynthPayload, null, 2));
 
     const prepared = await Orynth.prepareLaunch(orynthPayload);
 
     // prepared.launch is the actual data
     const orynthLaunch = prepared.launch;
 
-    // Partner signs as poolCreator — API key & private key never leave server
-    const partiallySignedTxHex = Orynth.signAsPoolCreator(orynthLaunch.preparedTxHex);
+    if (!orynthLaunch?.preparedTxHex) {
+      return res.status(500).json({ success: false, error: "Orynth did not return a transaction to sign. Please try again." });
+    }
+
+    // Store the raw unsigned tx — poolCreator signs at submit time so Phantom
+    // receives an unsigned tx and can simulate it without a "malicious" warning.
+    const rawTxHex = orynthLaunch.preparedTxHex;
 
     // Upsert launch record
     const [launch] = await db.insert(launches).values({
       externalId,
       orynthLaunchId:        orynthLaunch.id,
-      launcherId:            userId,
+      launcherId:            null,
       sourcePlatform:        "reddit",
       sourceId:              body.redditPostId,
       sourceUrl:             body.redditUrl,
@@ -264,9 +265,10 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       payerWalletAddress:    body.payerWalletAddress,
       tokenName:             body.tokenName,
       tokenSymbol:           body.tokenSymbol.toUpperCase(),
+      tokenSlug,
       tokenDescription:      body.description,
       tokenImageUrl:         body.imageUrl,
-      preparedTxHex:         partiallySignedTxHex,
+      preparedTxHex:         rawTxHex,
       feeConfig:             JSON.stringify(orynthLaunch.feeConfig),
       partnerFeeBps:         orynthLaunch.feeConfig.partnerFeeBps,
       creatorFeeBps:         orynthLaunch.feeConfig.suggestedCreatorShareBps,
@@ -277,7 +279,8 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       target: launches.externalId,
       set: {
         orynthLaunchId: orynthLaunch.id,
-        preparedTxHex:  partiallySignedTxHex,
+        preparedTxHex:  rawTxHex,
+        tokenSlug,
         feeConfig:      JSON.stringify(orynthLaunch.feeConfig),
         status:         mapOrynthStatus(orynthLaunch.status),
         errorMessage:   null,
@@ -294,15 +297,11 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
       success: true,
       launchId:             launch.id,
       orynthLaunchId:       launch.orynthLaunchId,
-      partiallySignedTxHex,  // payer signs this on the frontend
+      partiallySignedTxHex: rawTxHex,  // payer signs this on the frontend; poolCreator signs at submit
       requiredSigners:      orynthLaunch.requiredSigners,
       feeConfig:            orynthLaunch.feeConfig,
     });
   } catch (err) {
-    console.error("❌ [Launch/prepare] Error:", err instanceof Error ? err.message : err);
-    if (err && typeof err === "object" && "issues" in err) {
-      console.error("❌ [Launch/prepare] Zod issues:", JSON.stringify((err as any).issues));
-    }
     res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed to prepare launch" });
   }
 });
@@ -311,7 +310,7 @@ router.post("/prepare", authenticateToken, async (req: Request, res: Response) =
 // Payer wallet has signed the tx on the frontend.
 // We receive the fully-signed tx hex and submit it to Orynth.
 
-router.post("/submit", authenticateToken, async (req: Request, res: Response) => {
+router.post("/submit", async (req: Request, res: Response) => {
   let launchId: string | undefined;
   try {
     const body = z.object({
@@ -327,12 +326,16 @@ router.post("/submit", authenticateToken, async (req: Request, res: Response) =>
     if (!launch)                 return res.status(404).json({ success: false, error: "Launch not found" });
     if (!launch.orynthLaunchId)  return res.status(400).json({ success: false, error: "Launch not prepared with Orynth" });
 
+    // Add poolCreator signature now that Phantom (payer) has signed first.
+    // This order avoids Phantom's "malicious dApp" simulation warning.
+    const fullySigned = Orynth.signAsPoolCreator(body.signedTxHex);
+
     await db.update(launches)
-      .set({ signedTxHex: body.signedTxHex, status: "submitting", updatedAt: new Date() })
+      .set({ signedTxHex: fullySigned, status: "submitting", updatedAt: new Date() })
       .where(eq(launches.id, body.launchId));
 
     // Orynth validates that signed tx message matches prepared message → fee tampering prevented
-    await Orynth.submitLaunch(launch.orynthLaunchId, body.signedTxHex);
+    await Orynth.submitLaunch(launch.orynthLaunchId, fullySigned);
 
     await db.update(launches)
       .set({ status: "confirming", updatedAt: new Date() })
@@ -340,8 +343,6 @@ router.post("/submit", authenticateToken, async (req: Request, res: Response) =>
 
     res.json({ success: true, launchId: body.launchId, orynthLaunchId: launch.orynthLaunchId });
   } catch (err) {
-    console.error("❌ Launch submit error:", err);
-
     if (launchId) {
       try {
         await db.update(launches)
@@ -386,7 +387,6 @@ router.get("/:launchId/status", async (req, res) => {
 
         if (newStatus === "confirmed") await onLaunchConfirmed(launch);
       } catch (e) {
-        console.warn("Could not sync Orynth status:", e);
       }
     }
 
@@ -470,7 +470,6 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("❌ Webhook error:", err);
     res.status(500).json({ error: "Webhook processing failed" });
   }
 });

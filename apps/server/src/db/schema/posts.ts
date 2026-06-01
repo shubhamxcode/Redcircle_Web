@@ -36,6 +36,7 @@ export const posts = pgTable("posts", {
   // Blockchain Info
   tokenMintAddress: text("token_mint_address").unique(), // Solana token mint address
   tokenSymbol: text("token_symbol"), // e.g., "POST123"
+  tokenSlug: text("token_slug").unique(), // e.g. "fade-a3f2b1" — used for canonical URL
   tokenDecimals: integer("token_decimals").default(9), // Standard SPL token decimals
 
   // Tokenization Status
@@ -47,7 +48,7 @@ export const posts = pgTable("posts", {
   holders: integer("holders").default(0).notNull(), // Number of unique token holders
   
   // Creator/Curator Info
-  creatorId: uuid("creator_id").references(() => users.id).notNull(), // User who tokenized this post
+  creatorId: uuid("creator_id").references(() => users.id), // null for wallet-only launches
   creatorRewards: numeric("creator_rewards", { precision: 18, scale: 9 }).default("0").notNull(), // Rewards earned
   
   // Metadata

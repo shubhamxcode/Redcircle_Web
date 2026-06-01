@@ -76,10 +76,10 @@ const PARTICLES = [
   { x: -50, y: 0,   color: "#00FFD1" },
 ];
 
-export default function LaunchPanel() {
+export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
   const { publicKey, signTransaction, connected } = useWallet();
 
-  const [url, setUrl]               = useState("");
+  const [url, setUrl]               = useState(initialUrl || "");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
   const [quote, setQuote]           = useState<Quote | null>(null);
   const [tokenName, setTokenName]   = useState("");
@@ -90,6 +90,7 @@ export default function LaunchPanel() {
   const [launchId, setLaunchId]     = useState<string | null>(null);
   const [mintAddress, setMintAddress] = useState<string | null>(null);
   const [rocketGone, setRocketGone] = useState(false);
+  const [fetchLabel, setFetchLabel] = useState("Fetching Reddit post");
 
 
   const activeStage = getActiveStage(step);
@@ -127,8 +128,22 @@ export default function LaunchPanel() {
     setRocketGone(false);
   }, [step]);
 
+  useEffect(() => {
+    if (step !== "fetching") { setFetchLabel("Fetching Reddit post"); return; }
+    const t = setTimeout(() => setFetchLabel("Generating Token Details"), 3000);
+    return () => clearTimeout(t);
+  }, [step]);
+
+  // Auto-fetch only when arriving from the hot page (initialUrl set via sessionStorage)
+  // On refresh, sessionStorage is already cleared so initialUrl is undefined — no auto-fetch
+  useEffect(() => {
+    if (initialUrl) handleFetchPost();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleFetchPost = async () => {
-    if (!url) return;
+    const targetUrl = url;
+    if (!targetUrl) return;
     setError("");
     setStep("fetching");
     setPostPreview(null);
@@ -138,7 +153,7 @@ export default function LaunchPanel() {
       const res  = await fetch(`${apiUrl}/api/posts/fetch-reddit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: targetUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch Reddit post");
@@ -171,7 +186,7 @@ export default function LaunchPanel() {
     setError("");
     try {
       setStep("preparing");
-      const prepRes = await fetchWithAuth(`/api/launches/prepare`, {
+      const prepRes = await fetch(`${getApiUrl()}/api/launches/prepare`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -201,7 +216,7 @@ export default function LaunchPanel() {
       const signedTxHex = Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString("hex");
 
       setStep("submitting");
-      const subRes = await fetchWithAuth(`/api/launches/submit`, {
+      const subRes = await fetch(`${getApiUrl()}/api/launches/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ launchId: newLaunchId, signedTxHex }),
@@ -212,7 +227,13 @@ export default function LaunchPanel() {
       setStep("polling");
       toast.success("Transaction submitted! Waiting for confirmation…");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Launch failed");
+      const msg = err instanceof Error ? err.message : "Launch failed";
+      // Blockhash expired — transaction took too long, just retry
+      if (msg.toLowerCase().includes("blockhash not found") || msg.toLowerCase().includes("blockhash")) {
+        setError("Transaction expired — please click Launch again immediately to retry.");
+      } else {
+        setError(msg);
+      }
       setStep("error");
     }
   };
@@ -316,6 +337,62 @@ export default function LaunchPanel() {
           {/* Terminal header */}
           <TerminalHeader />
 
+          {/* Fetching overlay */}
+          <AnimatePresence>
+            {step === "fetching" && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#080808]/90 backdrop-blur-sm rounded-2xl"
+              >
+                {/* Mascot — whole group bounces together so rings stay symmetric */}
+                <motion.div
+                  animate={{ y: [0, -6, 0] }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                  className="relative flex items-center justify-center mb-5"
+                >
+                  {/* Outer pulse rings */}
+                  <motion.div
+                    animate={{ scale: [1, 1.6, 1], opacity: [0.25, 0, 0.25] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute w-28 h-28 rounded-full border border-[#E8431C]/30"
+                  />
+                  <motion.div
+                    animate={{ scale: [1, 1.35, 1], opacity: [0.35, 0, 0.35] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                    className="absolute w-20 h-20 rounded-full border border-[#E8431C]/40"
+                  />
+                  {/* Spinning orbit ring */}
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    className="absolute w-16 h-16 rounded-full border border-dashed border-[#E8431C]/20"
+                  />
+                  <img
+                    src="/favicon-circle.png"
+                    alt="Redcircle"
+                    className="w-12 h-12 relative z-10 drop-shadow-[0_0_12px_rgba(232,67,28,0.6)]"
+                  />
+                </motion.div>
+
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={fetchLabel}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.3 }}
+                    className="text-white font-mono font-semibold text-base tracking-wide"
+                  >
+                    {fetchLabel}
+                  </motion.p>
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Progress bar */}
           <div className="px-6 pt-5 pb-3">
             <div className="flex items-start gap-0">
@@ -364,8 +441,9 @@ export default function LaunchPanel() {
 
           <div className="p-4 sm:p-6 space-y-6">
 
-            {/* URL input */}
-            <div className={`space-y-3 ${!postPreview ? "max-w-xl mx-auto" : ""}`}>
+            {/* URL input — hidden once post is loaded (step 2+) */}
+            {activeStage === 0 && (
+            <div className="space-y-3 max-w-xl mx-auto">
               <label className="block text-[12px] font-mono uppercase tracking-widest text-white ml-0.5">
                 Reddit Post Link
               </label>
@@ -391,18 +469,29 @@ export default function LaunchPanel() {
                   }
                 </button>
               </div>
-
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 text-red-400 text-xs bg-red-500/5 border border-red-500/15 px-3 py-2.5 rounded-lg font-mono"
-                >
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  {error}
-                </motion.div>
-              )}
             </div>
+            )}
+
+            {/* Back button — shown in step 2 so user can change the post */}
+            {activeStage === 1 && (
+              <button
+                onClick={() => { setPostPreview(null); setStep("idle"); setError(""); setQuote(null); }}
+                className="flex items-center gap-1.5 text-xs font-mono text-white/40 hover:text-white/70 transition-colors cursor-pointer"
+              >
+                <span className="text-base leading-none">←</span> Change post
+              </button>
+            )}
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 text-red-400 text-xs bg-red-500/5 border border-red-500/15 px-3 py-2.5 rounded-lg font-mono"
+              >
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {error}
+              </motion.div>
+            )}
 
             {/* Post preview + config */}
             <AnimatePresence>

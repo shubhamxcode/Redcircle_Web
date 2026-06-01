@@ -2,7 +2,7 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, asc, and, gte, ilike } from "drizzle-orm";
+import { eq, desc, asc, and, gte, ilike, inArray, or, sql } from "drizzle-orm";
 import { getEarnings } from "../services/orynth.service";
 
 const { posts, launches } = schema;
@@ -110,8 +110,6 @@ Reply with ONLY a JSON object, no markdown:
         existingPost: existingPosts[0],
       });
     }
-
-    console.log(`✨ Token suggestion [${suggestedBy}]: "${suggestedName}" / $${suggestedSymbol}`);
 
     res.json({
       success: true,
@@ -426,11 +424,37 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [post] = await db
-      .select()
-      .from(posts)
-      .where(eq(posts.id, id))
+    let post: typeof posts.$inferSelect | undefined;
+
+    // 1. New random slug format: "fade-a3f2b1" stored in tokenSlug column
+    const [bySlug] = await db.select().from(posts)
+      .where(eq(posts.tokenSlug, id))
       .limit(1);
+    post = bySlug;
+
+    // 2. Legacy mint-prefix format: "mildlyin-hvzqsv" (symbol + first 6 of mint)
+    //    Keeps existing shared/bookmarked URLs working
+    if (!post) {
+      const dashIdx = id.lastIndexOf("-");
+      if (dashIdx > 0) {
+        const sym       = id.slice(0, dashIdx);
+        const shortMint = id.slice(dashIdx + 1);
+        if (shortMint.length === 6) {
+          const [byMintPrefix] = await db.select().from(posts)
+            .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`)))
+            .limit(1);
+          post = byMintPrefix;
+        }
+      }
+    }
+
+    // 3. Fall back: UUID, full mint address, or symbol-only
+    if (!post) {
+      const [byOther] = await db.select().from(posts)
+        .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id)))
+        .limit(1);
+      post = byOther;
+    }
 
     if (!post) {
       return res.status(404).json({ error: "Post not found" });
@@ -457,8 +481,22 @@ router.get("/:id/creator-earnings", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find the confirmed launch for this post (by postId or redditPostId)
-    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    // Accept slug, UUID, mint address, or symbol
+    let post: typeof posts.$inferSelect | undefined;
+    const dashIdx = id.lastIndexOf("-");
+    if (dashIdx > 0) {
+      const sym = id.slice(0, dashIdx), shortMint = id.slice(dashIdx + 1);
+      if (shortMint.length === 6) {
+        const [r] = await db.select().from(posts)
+          .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`))).limit(1);
+        post = r;
+      }
+    }
+    if (!post) {
+      const [r] = await db.select().from(posts)
+        .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id))).limit(1);
+      post = r;
+    }
     if (!post) return res.status(404).json({ success: false, error: "Post not found" });
 
     // Look up the launch by mint address or reddit post id
@@ -502,6 +540,43 @@ router.get("/:id/creator-earnings", async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching creator earnings:", err);
     res.status(500).json({ success: false, error: "Failed to fetch creator earnings" });
+  }
+});
+
+/**
+ * POST /api/posts/check-tokenized
+ * Given a list of Reddit post IDs, returns which ones have been tokenized on the platform.
+ */
+router.post("/check-tokenized", async (req, res) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return res.json({ tokenized: {} });
+
+    const rows = await db
+      .select({
+        redditPostId: posts.redditPostId,
+        id: posts.id,
+        tokenSymbol: posts.tokenSymbol,
+        tokenMintAddress: posts.tokenMintAddress,
+        status: posts.status,
+      })
+      .from(posts)
+      .where(inArray(posts.redditPostId, ids));
+
+    const tokenized: Record<string, { postId: string; tokenSymbol: string | null; mintAddress: string | null; status: string }> = {};
+    for (const row of rows) {
+      tokenized[row.redditPostId] = {
+        postId: row.id,
+        tokenSymbol: row.tokenSymbol,
+        mintAddress: row.tokenMintAddress,
+        status: row.status,
+      };
+    }
+
+    res.json({ tokenized });
+  } catch (err) {
+    console.error("❌ Error checking tokenized posts:", err);
+    res.status(500).json({ tokenized: {} });
   }
 });
 
