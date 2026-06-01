@@ -208,7 +208,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       },
       name:        body.tokenName,
       symbol:      body.tokenSymbol.toUpperCase(),
-      description: body.description?.trim() || body.redditTitle,
+      description: `${body.description?.trim() || body.redditTitle}\n\n🔴 redcircle.lol/token/${tokenSlug}`,
       imageUrl:    body.imageUrl ?? body.redditThumbnail ?? "https://www.redcircle.lol/logo.png",
       websiteUrl:  `https://redcircle.lol/token/${tokenSlug}`,
     };
