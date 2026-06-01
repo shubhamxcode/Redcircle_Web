@@ -60,7 +60,6 @@ async function syncLaunchToFeed(launch: LaunchRow) {
       },
     });
   } catch (e) {
-    console.warn("Could not sync launch to posts feed:", e);
   }
 }
 
@@ -117,7 +116,6 @@ Respond with valid JSON only, no markdown:
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const isQuota = msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED");
-    console.error("Gemini suggest-name error:", isQuota ? "quota exceeded" : msg);
     // Return 200 with null so the frontend falls back to manual input gracefully
     res.json({ name: null, symbol: null, error: isQuota ? "quota" : "unavailable" });
   }
@@ -162,12 +160,14 @@ router.post("/prepare", async (req: Request, res: Response) => {
     // Use wallet address as the launcher identifier — no Redcircle account needed
     const externalId = `redcircle:${body.redditPostId}:${body.payerWalletAddress}`;
 
-    // Idempotency check — return existing non-failed launch
+    // Idempotency check — only reuse if the tx is already on-chain.
+    // awaiting_payer_signature records have an expired blockhash (~90s on Solana), so always re-prepare.
     const [existing] = await db.select().from(launches)
       .where(eq(launches.externalId, externalId))
       .limit(1);
 
-    if (existing && existing.status !== "failed" && existing.preparedTxHex) {
+    const ON_CHAIN_STATUSES = new Set<DbStatus>(["submitting", "confirming", "confirmed"]);
+    if (existing && ON_CHAIN_STATUSES.has(existing.status) && existing.preparedTxHex) {
       return res.json({
         success: true,
         launchId:             existing.id,
@@ -177,9 +177,15 @@ router.post("/prepare", async (req: Request, res: Response) => {
       });
     }
 
+    // If a previous attempt failed at the Orynth level, pass a fresh externalId so Orynth
+    // creates a new launch instead of returning the stale failed record idempotently.
+    const orynthExternalId = existing?.status === "failed"
+      ? `${externalId}:${Date.now()}`
+      : externalId;
+
     // Call Orynth /prepare — source has NO `title`, creator has NO `displayName`
     const orynthPayload = {
-      externalId,
+      externalId: orynthExternalId,
       payerWalletAddress: body.payerWalletAddress,
       source: {
         platform: "reddit",
@@ -203,15 +209,12 @@ router.post("/prepare", async (req: Request, res: Response) => {
       imageUrl:    body.imageUrl ?? body.redditThumbnail ?? "https://www.redcircle.lol/logo.png",
     };
 
-    console.log("🚀 [Launch/prepare] Orynth payload:", JSON.stringify(orynthPayload, null, 2));
-
     const prepared = await Orynth.prepareLaunch(orynthPayload);
 
     // prepared.launch is the actual data
     const orynthLaunch = prepared.launch;
 
     if (!orynthLaunch?.preparedTxHex) {
-      console.error("❌ Orynth did not return preparedTxHex:", JSON.stringify(prepared));
       return res.status(500).json({ success: false, error: "Orynth did not return a transaction to sign. Please try again." });
     }
 
@@ -267,10 +270,6 @@ router.post("/prepare", async (req: Request, res: Response) => {
       feeConfig:            orynthLaunch.feeConfig,
     });
   } catch (err) {
-    console.error("❌ [Launch/prepare] Error:", err instanceof Error ? err.message : err);
-    if (err && typeof err === "object" && "issues" in err) {
-      console.error("❌ [Launch/prepare] Zod issues:", JSON.stringify((err as any).issues));
-    }
     res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Failed to prepare launch" });
   }
 });
@@ -308,8 +307,6 @@ router.post("/submit", async (req: Request, res: Response) => {
 
     res.json({ success: true, launchId: body.launchId, orynthLaunchId: launch.orynthLaunchId });
   } catch (err) {
-    console.error("❌ Launch submit error:", err);
-
     if (launchId) {
       try {
         await db.update(launches)
@@ -354,7 +351,6 @@ router.get("/:launchId/status", async (req, res) => {
 
         if (newStatus === "confirmed") await syncLaunchToFeed(launch);
       } catch (e) {
-        console.warn("Could not sync Orynth status:", e);
       }
     }
 
@@ -427,7 +423,6 @@ router.post("/webhook", async (req: Request, res: Response) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("❌ Webhook error:", err);
     res.status(500).json({ error: "Webhook processing failed" });
   }
 });
