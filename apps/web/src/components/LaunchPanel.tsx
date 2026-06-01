@@ -1,9 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { Transaction } from "@solana/web3.js";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import {
   TrendingUp, Users, AlertCircle, ArrowRight, Rocket,
   CheckCircle, Loader2, ExternalLink, Terminal, Check,
@@ -77,8 +74,6 @@ const PARTICLES = [
 ];
 
 export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
-  const { publicKey, signTransaction, connected } = useWallet();
-
   const [url, setUrl]               = useState(initialUrl || "");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
   const [quote, setQuote]           = useState<Quote | null>(null);
@@ -179,10 +174,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
   };
 
   const handleLaunch = async () => {
-    if (!postPreview || !connected || !publicKey || !signTransaction) {
-      setError("Connect your wallet first");
-      return;
-    }
+    if (!postPreview) return;
     setError("");
     try {
       setStep("preparing");
@@ -190,50 +182,25 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          redditPostId:       postPreview.redditPostId,
-          redditUrl:          postPreview.url,
-          redditTitle:        postPreview.title,
-          redditAuthor:       postPreview.author,
-          redditThumbnail:    postPreview.thumbnail,
-          payerWalletAddress: publicKey.toBase58(),
+          redditPostId:    postPreview.redditPostId,
+          redditUrl:       postPreview.url,
+          redditTitle:     postPreview.title,
+          redditAuthor:    postPreview.author,
+          redditThumbnail: postPreview.thumbnail,
           tokenName,
-          tokenSymbol:        tokenSymbol.toUpperCase(),
+          tokenSymbol:     tokenSymbol.toUpperCase(),
           description,
-          imageUrl:           postPreview.thumbnail,
+          imageUrl:        postPreview.thumbnail,
         }),
       });
       const prepData = await prepRes.json();
       if (!prepRes.ok) throw new Error(prepData.error || "Failed to prepare launch");
 
-      const { launchId: newLaunchId, partiallySignedTxHex } = prepData;
-      setLaunchId(newLaunchId);
-
-      setStep("signing");
-      const txBuffer = Buffer.from(partiallySignedTxHex, "hex");
-      const tx = Transaction.from(txBuffer);
-      tx.feePayer = publicKey;
-      const signedTx    = await signTransaction(tx);
-      const signedTxHex = Buffer.from(signedTx.serialize({ requireAllSignatures: false })).toString("hex");
-
-      setStep("submitting");
-      const subRes = await fetch(`${getApiUrl()}/api/launches/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ launchId: newLaunchId, signedTxHex }),
-      });
-      const subData = await subRes.json();
-      if (!subRes.ok) throw new Error(subData.error || "Failed to submit launch");
-
+      setLaunchId(prepData.launchId);
       setStep("polling");
       toast.success("Transaction submitted! Waiting for confirmation…");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Launch failed";
-      // Blockhash expired — transaction took too long, just retry
-      if (msg.toLowerCase().includes("blockhash not found") || msg.toLowerCase().includes("blockhash")) {
-        setError("Transaction expired — please click Launch again immediately to retry.");
-      } else {
-        setError(msg);
-      }
+      setError(err instanceof Error ? err.message : "Launch failed");
       setStep("error");
     }
   };
@@ -245,7 +212,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
     setRocketGone(false);
   };
 
-  const isBusy = ["fetching", "quoting", "preparing", "signing", "submitting", "polling"].includes(step);
+  const isBusy = ["fetching", "quoting", "preparing", "polling"].includes(step);
 
   return (
     <div className="w-full max-w-3xl mx-auto">
@@ -553,18 +520,6 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
                       />
                     </div>
 
-                    {/* Step 3 — Payer Wallet */}
-                    <div>
-                      <SectionLabel n={3} text="Payer Wallet" />
-                      <div className="mt-2 flex flex-col gap-2">
-                        <WalletMultiButton className="!rounded-lg !h-10 !text-sm !w-full !justify-center !font-mono" />
-                        {connected && publicKey && (
-                          <p className="text-[10px] text-[#00FFD1]/40 font-mono text-center break-all px-1">
-                            {publicKey.toBase58()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
                   </div>
 
                   {/* Launch button — centered */}
@@ -578,11 +533,8 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
                     </button>
                     <button
                       onClick={handleLaunch}
-                      disabled={isBusy || !connected || !tokenName || !tokenSymbol}
-                      title={
-                        !connected ? "Connect your Solana wallet" :
-                        !tokenName || !tokenSymbol ? "Fill in token details" : undefined
-                      }
+                      disabled={isBusy || !tokenName || !tokenSymbol}
+                      title={!tokenName || !tokenSymbol ? "Fill in token details" : undefined}
                       className={cn(
                         "px-8 py-2.5 rounded-lg font-mono font-bold text-sm transition-all flex items-center justify-center gap-2",
                         "bg-[#E8431C] hover:bg-[#FF5535] text-black",

@@ -145,9 +145,6 @@ export async function prepareLaunch(req: PrepareRequest): Promise<PrepareRespons
 }
 
 // ─── Sign as poolCreator ─────────────────────────────────────────────────────
-// Partial-signs the prepared tx with ORYNTH_POOL_CREATOR_WALLET private key.
-// Private key never leaves the server.
-
 export function signAsPoolCreator(preparedTxHex: string): string {
   const privKeyB58 = process.env.ORYNTH_POOL_CREATOR_WALLET;
   if (!privKeyB58) throw new Error("ORYNTH_POOL_CREATOR_WALLET not configured");
@@ -157,6 +154,24 @@ export function signAsPoolCreator(preparedTxHex: string): string {
   tx.partialSign(keypair);
 
   return tx.serialize({ requireAllSignatures: false }).toString("hex");
+}
+
+// ─── Sign as payer (Redcircle server wallet) ─────────────────────────────────
+export function signAsPayer(txHex: string): string {
+  const privKeyB58 = process.env.REDCIRCLE_PAYER_WALLET;
+  if (!privKeyB58) throw new Error("REDCIRCLE_PAYER_WALLET not configured");
+
+  const keypair = Keypair.fromSecretKey(bs58.decode(privKeyB58));
+  const tx = Transaction.from(Buffer.from(txHex, "hex"));
+  tx.partialSign(keypair);
+
+  return tx.serialize({ requireAllSignatures: false }).toString("hex");
+}
+
+export function getPayerPublicKey(): string {
+  const privKeyB58 = process.env.REDCIRCLE_PAYER_WALLET;
+  if (!privKeyB58) throw new Error("REDCIRCLE_PAYER_WALLET not configured");
+  return Keypair.fromSecretKey(bs58.decode(privKeyB58)).publicKey.toBase58();
 }
 
 // ─── Submit ──────────────────────────────────────────────────────────────────

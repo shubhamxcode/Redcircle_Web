@@ -89,6 +89,10 @@ Reply with ONLY a JSON object, no markdown:
             }
           );
           const geminiData = await geminiRes.json() as any;
+          if (!geminiRes.ok) {
+            console.warn("⚠️ Gemini error:", geminiRes.status, JSON.stringify(geminiData?.error ?? geminiData));
+            return;
+          }
           const raw = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
           const jsonMatch = raw.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
