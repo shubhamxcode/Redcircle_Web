@@ -210,6 +210,11 @@ router.post("/prepare", async (req: Request, res: Response) => {
     // prepared.launch is the actual data
     const orynthLaunch = prepared.launch;
 
+    if (!orynthLaunch?.preparedTxHex) {
+      console.error("❌ Orynth did not return preparedTxHex:", JSON.stringify(prepared));
+      return res.status(500).json({ success: false, error: "Orynth did not return a transaction to sign. Please try again." });
+    }
+
     // Partner signs as poolCreator — API key & private key never leave server
     const partiallySignedTxHex = Orynth.signAsPoolCreator(orynthLaunch.preparedTxHex);
 
