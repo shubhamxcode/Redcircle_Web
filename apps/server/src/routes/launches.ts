@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { db } from "../db";
 import { launches, posts } from "../db";
 import { authenticateToken } from "../middleware/auth";
@@ -47,6 +48,7 @@ async function syncLaunchToFeed(launch: LaunchRow) {
       currentPrice:     "0",
       tokenMintAddress: launch.mintAddress,
       tokenSymbol:      launch.tokenSymbol,
+      tokenSlug:        launch.tokenSlug ?? undefined,
       description:      launch.tokenDescription ?? undefined,
       status:           "active",
       creatorId:        launch.launcherId ?? null,
@@ -55,6 +57,7 @@ async function syncLaunchToFeed(launch: LaunchRow) {
       set: {
         tokenMintAddress: launch.mintAddress,
         tokenSymbol:      launch.tokenSymbol,
+        tokenSlug:        launch.tokenSlug ?? undefined,
         status:           "active",
         updatedAt:        new Date(),
       },
@@ -183,6 +186,10 @@ router.post("/prepare", async (req: Request, res: Response) => {
       ? `${externalId}:${Date.now()}`
       : externalId;
 
+    // Reuse the slug from a previous attempt so the URL stays stable across retries.
+    const tokenSlug = existing?.tokenSlug
+      ?? `${body.tokenSymbol.toLowerCase()}-${randomBytes(3).toString("hex")}`;
+
     // Call Orynth /prepare — source has NO `title`, creator has NO `displayName`
     const orynthPayload = {
       externalId: orynthExternalId,
@@ -201,12 +208,9 @@ router.post("/prepare", async (req: Request, res: Response) => {
       },
       name:        body.tokenName,
       symbol:      body.tokenSymbol.toUpperCase(),
-      description: (() => {
-        const base = body.description?.trim() || body.redditTitle;
-        const tokenSlug = body.tokenSymbol.toLowerCase();
-        return `${base}\n\n🔴 Redcircle: https://redcircle.lol/token/${tokenSlug}\n📝 Reddit: ${body.redditUrl}`;
-      })(),
+      description: body.description?.trim() || body.redditTitle,
       imageUrl:    body.imageUrl ?? body.redditThumbnail ?? "https://www.redcircle.lol/logo.png",
+      websiteUrl:  `https://redcircle.lol/token/${tokenSlug}`,
     };
 
     const prepared = await Orynth.prepareLaunch(orynthPayload);
@@ -236,6 +240,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       payerWalletAddress:    body.payerWalletAddress,
       tokenName:             body.tokenName,
       tokenSymbol:           body.tokenSymbol.toUpperCase(),
+      tokenSlug,
       tokenDescription:      body.description,
       tokenImageUrl:         body.imageUrl,
       preparedTxHex:         rawTxHex,
@@ -250,6 +255,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       set: {
         orynthLaunchId: orynthLaunch.id,
         preparedTxHex:  rawTxHex,
+        tokenSlug,
         feeConfig:      JSON.stringify(orynthLaunch.feeConfig),
         status:         mapOrynthStatus(orynthLaunch.status),
         errorMessage:   null,

@@ -26,6 +26,7 @@ export interface PrepareRequest {
   symbol: string;
   description: string;
   imageUrl: string;
+  websiteUrl?: string;
 }
 
 export type LaunchStatus = "prepared" | "submitted" | "launched" | "failed";

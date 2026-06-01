@@ -424,21 +424,31 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Try slug format: {symbol}-{shortMint} e.g. "doge-gllbyh"
-    // shortMint is always exactly 6 chars — guards against UUIDs which also contain dashes
     let post: typeof posts.$inferSelect | undefined;
-    const dashIdx = id.lastIndexOf("-");
-    if (dashIdx > 0) {
-      const sym       = id.slice(0, dashIdx);
-      const shortMint = id.slice(dashIdx + 1);
-      if (shortMint.length === 6) {
-        const [bySlug] = await db.select().from(posts)
-          .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`)))
-          .limit(1);
-        post = bySlug;
+
+    // 1. New random slug format: "fade-a3f2b1" stored in tokenSlug column
+    const [bySlug] = await db.select().from(posts)
+      .where(eq(posts.tokenSlug, id))
+      .limit(1);
+    post = bySlug;
+
+    // 2. Legacy mint-prefix format: "mildlyin-hvzqsv" (symbol + first 6 of mint)
+    //    Keeps existing shared/bookmarked URLs working
+    if (!post) {
+      const dashIdx = id.lastIndexOf("-");
+      if (dashIdx > 0) {
+        const sym       = id.slice(0, dashIdx);
+        const shortMint = id.slice(dashIdx + 1);
+        if (shortMint.length === 6) {
+          const [byMintPrefix] = await db.select().from(posts)
+            .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`)))
+            .limit(1);
+          post = byMintPrefix;
+        }
       }
     }
-    // Fall back: UUID, full mint address, or symbol-only (for on-chain metadata links)
+
+    // 3. Fall back: UUID, full mint address, or symbol-only
     if (!post) {
       const [byOther] = await db.select().from(posts)
         .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id)))

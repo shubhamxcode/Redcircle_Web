@@ -50,6 +50,13 @@
       "when": 1779840000000,
       "tag": "0006_revert_redcircle_protocol",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1748736000000,
+      "tag": "0008_add_token_slug",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,7 @@ export const launches = pgTable("launches", {
   // Token metadata
   tokenName: text("token_name").notNull(),
   tokenSymbol: text("token_symbol").notNull(),
+  tokenSlug: text("token_slug"),  // e.g. "fade-a3f2b1" — unique URL-safe identifier
   tokenDescription: text("token_description"),
   tokenImageUrl: text("token_image_url"),
 

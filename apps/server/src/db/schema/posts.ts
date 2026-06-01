@@ -36,6 +36,7 @@ export const posts = pgTable("posts", {
   // Blockchain Info
   tokenMintAddress: text("token_mint_address").unique(), // Solana token mint address
   tokenSymbol: text("token_symbol"), // e.g., "POST123"
+  tokenSlug: text("token_slug").unique(), // e.g. "fade-a3f2b1" — used for canonical URL
   tokenDecimals: integer("token_decimals").default(9), // Standard SPL token decimals
 
   // Tokenization Status
