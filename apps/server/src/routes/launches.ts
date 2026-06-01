@@ -5,6 +5,7 @@ import { db } from "../db";
 import { launches, posts } from "../db";
 import { authenticateToken } from "../middleware/auth";
 import * as Orynth from "../services/orynth.service";
+import { broadcastLaunch } from "../services/ws.service";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router: express.Router = express.Router();
@@ -61,6 +62,30 @@ async function syncLaunchToFeed(launch: LaunchRow) {
   } catch (e) {
     console.warn("Could not sync launch to posts feed:", e);
   }
+}
+
+// ─── Fire-on-confirmation side effects ───────────────────────────────────────
+// Called exactly once when a launch transitions to `confirmed`. Syncs the feed
+// and broadcasts to WebSocket consumers (e.g. the auto-buy Telegram bot).
+async function onLaunchConfirmed(launch: LaunchRow) {
+  await syncLaunchToFeed(launch);
+  if (!launch.mintAddress) return;
+  broadcastLaunch({
+    type:            "launch.confirmed",
+    launchId:        launch.id,
+    orynthLaunchId:  launch.orynthLaunchId,
+    mintAddress:     launch.mintAddress,
+    poolAddress:     launch.poolAddress,
+    tokenName:       launch.tokenName,
+    tokenSymbol:     launch.tokenSymbol,
+    tokenImageUrl:   launch.tokenImageUrl,
+    sourcePlatform:  launch.sourcePlatform,
+    sourceUrl:       launch.sourceUrl,
+    sourceTitle:     launch.sourceTitle,
+    creatorUsername: launch.creatorUsername,
+    launchSignature: launch.launchSignature,
+    launchedAt:      (launch.launchedAt ?? new Date()).toISOString(),
+  });
 }
 
 // ─── POST /api/launches/suggest-name ─────────────────────────────────────────
@@ -359,7 +384,7 @@ router.get("/:launchId/status", async (req, res) => {
         launch.mintAddress = remote.launch.mintAddress ?? launch.mintAddress;
         launch.poolAddress = remote.launch.poolAddress ?? launch.poolAddress;
 
-        if (newStatus === "confirmed") await syncLaunchToFeed(launch);
+        if (newStatus === "confirmed") await onLaunchConfirmed(launch);
       } catch (e) {
         console.warn("Could not sync Orynth status:", e);
       }
@@ -412,6 +437,11 @@ router.post("/webhook", async (req: Request, res: Response) => {
     };
 
     if (type === "partner_launch.launched" && orynthLaunchId) {
+      // Read prior state first so we only fire side effects on the transition
+      const [prior] = await db.select().from(launches)
+        .where(eq(launches.orynthLaunchId, orynthLaunchId))
+        .limit(1);
+
       const now = new Date();
       await db.update(launches)
         .set({
@@ -425,11 +455,17 @@ router.post("/webhook", async (req: Request, res: Response) => {
         })
         .where(eq(launches.orynthLaunchId, orynthLaunchId));
 
-      // Sync to posts table so it appears in the feed
-      const [confirmedLaunch] = await db.select().from(launches)
-        .where(eq(launches.orynthLaunchId, orynthLaunchId))
-        .limit(1);
-      if (confirmedLaunch) await syncLaunchToFeed(confirmedLaunch);
+      // Only sync + broadcast (→ auto-buy) once, on the first confirmation
+      if (prior && prior.status !== "confirmed") {
+        await onLaunchConfirmed({
+          ...prior,
+          status:          "confirmed",
+          mintAddress:     mintAddress ?? prior.mintAddress,
+          poolAddress:     poolAddress ?? prior.poolAddress,
+          launchSignature: launchSignature ?? prior.launchSignature,
+          launchedAt:      now,
+        });
+      }
     }
 
     res.json({ ok: true });
