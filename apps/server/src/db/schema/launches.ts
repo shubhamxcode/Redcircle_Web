@@ -60,9 +60,9 @@ export const launches = pgTable("launches", {
   errorMessage: text("error_message"),
 
   // Creator earnings ledger (bps of trading volume)
-  partnerFeeBps: integer("partner_fee_bps").default(134),  // 1.34% — full partner bucket
-  creatorFeeBps: integer("creator_fee_bps").default(67),   // 0.67% — creator share
-  platformFeeBps: integer("platform_fee_bps").default(67), // 0.67% — platform share
+  partnerFeeBps: integer("partner_fee_bps").default(105),  // 1.05% — full partner bucket (Redcircle + Creator)
+  creatorFeeBps: integer("creator_fee_bps").default(50),   // 0.50% — creator share
+  platformFeeBps: integer("platform_fee_bps").default(55), // 0.55% — Redcircle share
 
   // On-chain settlement
   launchSignature:        text("launch_signature"),

@@ -94,8 +94,8 @@ router.get("/", async (req, res) => {
           parseFloat(earning.claimableUsdc ?? "0")
         : 0;
 
-      const creatorBps = row.creatorFeeBps ?? 67;
-      const partnerBps = row.partnerFeeBps ?? 134;
+      const creatorBps = row.creatorFeeBps ?? 50;
+      const partnerBps = row.partnerFeeBps ?? 105;
       const share      = partnerBps > 0 ? creatorBps / partnerBps : 0.5;
       const earned     = totalUsdc * share;
 

@@ -531,8 +531,8 @@ router.get("/:id/creator-earnings", async (req, res) => {
     }
 
     const totalUsdc  = parseFloat(earning.claimedUsdc ?? "0") + parseFloat(earning.claimableUsdc ?? "0");
-    const creatorBps = launch.creatorFeeBps ?? 67;
-    const partnerBps = launch.partnerFeeBps ?? 134;
+    const creatorBps = launch.creatorFeeBps ?? 50;
+    const partnerBps = launch.partnerFeeBps ?? 105;
     const share      = partnerBps > 0 ? creatorBps / partnerBps : 0.5;
     const creatorUsdc = totalUsdc * share;
 
