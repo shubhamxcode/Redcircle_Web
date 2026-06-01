@@ -357,12 +357,6 @@ export class RedditService {
       return { valid: false, reason: "This post has been deleted or removed." };
     }
 
-    // Check if post is too old (optional: e.g., older than 1 year)
-    const postAgeMonths = (Date.now() / 1000 - post.created_utc) / (30 * 24 * 60 * 60);
-    if (postAgeMonths > 12) {
-      return { valid: false, reason: "Post is too old. Please tokenize posts less than 1 year old." };
-    }
-
     return { valid: true };
   }
 }
