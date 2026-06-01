@@ -218,8 +218,9 @@ router.post("/prepare", async (req: Request, res: Response) => {
       return res.status(500).json({ success: false, error: "Orynth did not return a transaction to sign. Please try again." });
     }
 
-    // Partner signs as poolCreator — API key & private key never leave server
-    const partiallySignedTxHex = Orynth.signAsPoolCreator(orynthLaunch.preparedTxHex);
+    // Store the raw unsigned tx — poolCreator signs at submit time so Phantom
+    // receives an unsigned tx and can simulate it without a "malicious" warning.
+    const rawTxHex = orynthLaunch.preparedTxHex;
 
     // Upsert launch record
     const [launch] = await db.insert(launches).values({
@@ -237,7 +238,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       tokenSymbol:           body.tokenSymbol.toUpperCase(),
       tokenDescription:      body.description,
       tokenImageUrl:         body.imageUrl,
-      preparedTxHex:         partiallySignedTxHex,
+      preparedTxHex:         rawTxHex,
       feeConfig:             JSON.stringify(orynthLaunch.feeConfig),
       partnerFeeBps:         orynthLaunch.feeConfig.partnerFeeBps,
       creatorFeeBps:         orynthLaunch.feeConfig.suggestedCreatorShareBps,
@@ -248,7 +249,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       target: launches.externalId,
       set: {
         orynthLaunchId: orynthLaunch.id,
-        preparedTxHex:  partiallySignedTxHex,
+        preparedTxHex:  rawTxHex,
         feeConfig:      JSON.stringify(orynthLaunch.feeConfig),
         status:         mapOrynthStatus(orynthLaunch.status),
         errorMessage:   null,
@@ -265,7 +266,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       success: true,
       launchId:             launch.id,
       orynthLaunchId:       launch.orynthLaunchId,
-      partiallySignedTxHex,  // payer signs this on the frontend
+      partiallySignedTxHex: rawTxHex,  // payer signs this on the frontend; poolCreator signs at submit
       requiredSigners:      orynthLaunch.requiredSigners,
       feeConfig:            orynthLaunch.feeConfig,
     });
@@ -294,12 +295,16 @@ router.post("/submit", async (req: Request, res: Response) => {
     if (!launch)                 return res.status(404).json({ success: false, error: "Launch not found" });
     if (!launch.orynthLaunchId)  return res.status(400).json({ success: false, error: "Launch not prepared with Orynth" });
 
+    // Add poolCreator signature now that Phantom (payer) has signed first.
+    // This order avoids Phantom's "malicious dApp" simulation warning.
+    const fullySigned = Orynth.signAsPoolCreator(body.signedTxHex);
+
     await db.update(launches)
-      .set({ signedTxHex: body.signedTxHex, status: "submitting", updatedAt: new Date() })
+      .set({ signedTxHex: fullySigned, status: "submitting", updatedAt: new Date() })
       .where(eq(launches.id, body.launchId));
 
     // Orynth validates that signed tx message matches prepared message → fee tampering prevented
-    await Orynth.submitLaunch(launch.orynthLaunchId, body.signedTxHex);
+    await Orynth.submitLaunch(launch.orynthLaunchId, fullySigned);
 
     await db.update(launches)
       .set({ status: "confirming", updatedAt: new Date() })
