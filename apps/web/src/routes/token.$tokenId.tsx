@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "motion/react";
-import { ArrowLeft, ExternalLink, ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown, Copy, Check } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TradingModal from "@/components/TradingModal";
 import PriceChart from "@/components/PriceChart";
@@ -125,6 +126,7 @@ function ChartEmbed({ poolAddress, mintAddress }: { poolAddress: string | null; 
 function TokenDetailsPage() {
   const { tokenId } = Route.useParams();
   const navigate = Route.useNavigate();
+  const { user } = useAuth();
   const [post, setPost] = useState<FeedPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +136,8 @@ function TokenDetailsPage() {
   const [poolAddress, setPoolAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [creatorEarnings, setCreatorEarnings] = useState<string>("0");
+  const [claiming, setClaiming] = useState(false);
+  const [claimResult, setClaimResult] = useState<{ success: boolean; amount?: string } | null>(null);
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
     try {
@@ -179,6 +183,29 @@ function TokenDetailsPage() {
     }, 30_000);
     return () => clearInterval(interval);
   }, [post?.tokenMintAddress]);
+
+  const isCreator = !!(
+    user?.username &&
+    post?.author &&
+    user.username.toLowerCase() === post.author.toLowerCase()
+  );
+
+  const handleClaim = async () => {
+    if (claiming) return;
+    setClaiming(true);
+    setClaimResult(null);
+    try {
+      const res = await fetchWithAuth(`/api/posts/${tokenId}/claim-creator-earnings`, { method: "POST" });
+      const data = await res.json() as { success: boolean; error?: string; totalClaimed?: string };
+      if (!res.ok) throw new Error(data.error || "Claim failed");
+      setClaimResult({ success: true, amount: data.totalClaimed });
+      void fetchTokenDetails(false);
+    } catch (err) {
+      setClaimResult({ success: false });
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -298,12 +325,58 @@ function TokenDetailsPage() {
             className="order-1 lg:order-2 space-y-3"
           >
             {/* Creator earnings */}
-            {(
-              <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
-                <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest mb-1">Creator Earnings</p>
-                <p className="text-2xl font-bold text-white">${parseFloat(creatorEarnings).toFixed(2)} <span className="text-sm font-normal text-white/40">USDC</span></p>
-              </div>
-            )}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3 space-y-2.5">
+              <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest">Creator Earnings</p>
+              <p className="text-2xl font-bold text-white">
+                ${parseFloat(creatorEarnings).toFixed(2)}{" "}
+                <span className="text-sm font-normal text-white/40">USDC</span>
+              </p>
+
+              {claimResult?.success && (
+                <p className="text-[11px] text-green-400 font-medium">
+                  ✓ Claimed ${claimResult.amount} USDC
+                </p>
+              )}
+              {claimResult && !claimResult.success && (
+                <p className="text-[11px] text-red-400 font-medium">
+                  Claim failed — try again later
+                </p>
+              )}
+
+              {(() => {
+                const earningsNum = parseFloat(creatorEarnings);
+                const canClaim = isCreator && earningsNum > 0;
+                const label = claiming
+                  ? "Claiming…"
+                  : !user
+                    ? "Sign in to claim"
+                    : "Claim";
+
+                return (
+                  <button
+                    disabled={!canClaim || claiming}
+                    onClick={handleClaim}
+                    title={
+                      !user
+                        ? "Sign in to claim earnings"
+                        : !isCreator
+                          ? `Only u/${post.author} can claim these earnings`
+                          : earningsNum <= 0
+                            ? "No earnings to claim yet"
+                            : undefined
+                    }
+                    className={cn(
+                      "w-full rounded-lg py-2 text-xs font-bold transition-all",
+                      canClaim && !claiming
+                        ? "bg-[#00FFD1] text-black hover:bg-[#00FFD1]/85 cursor-pointer"
+                        : "bg-white/[0.04] text-white/25 cursor-not-allowed border border-white/[0.08]",
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })()}
+            </div>
 
             {/* Trade */}
             {isOnChain ? (
