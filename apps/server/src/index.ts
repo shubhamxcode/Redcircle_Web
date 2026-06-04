@@ -15,6 +15,7 @@ import waitlistRoutes from "./routes/waitlist";
 import launchesRoutes from "./routes/launches";
 import adminRoutes from "./routes/admin";
 import trendingRoutes from "./routes/trending";
+import rewardRoutes from "./routes/reward";
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use("/api/waitlist", waitlistRoutes);
 app.use("/api/launches", launchesRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/trending", trendingRoutes);
+app.use("/api/reward", rewardRoutes);
 
 // ── DexScreener proxy (avoids browser CORS restrictions) ──────────────────────
 // Pool address cache — TTL 10 minutes
