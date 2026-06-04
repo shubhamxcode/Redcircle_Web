@@ -165,6 +165,21 @@ router.post("/claims", async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "No pool addresses to claim" });
     }
 
+    // Filter to only pools owned by the current pool creator wallet and with claimable balance.
+    // This prevents "unknown signer" errors when old pools (created with a prior wallet) are included.
+    const currentWalletPubkey = Orynth.getPoolCreatorPublicKey();
+    const earningsData = await Orynth.getEarnings(poolAddresses);
+    const claimablePools = earningsData.earnings.filter(
+      (e) =>
+        parseFloat(e.claimableUsdc || "0") > 0 &&
+        (!e.poolCreatorWalletAddress || e.poolCreatorWalletAddress === currentWalletPubkey),
+    );
+    poolAddresses = claimablePools.map((e) => e.poolAddress);
+
+    if (!poolAddresses.length) {
+      return res.status(400).json({ success: false, error: "No claimable pools for current wallet — pools may belong to a previous wallet or have $0 balance" });
+    }
+
     // Seed one DB row per pool so we can track status
     await db.insert(claims).values(
       poolAddresses.map((pool) => ({ claimBatchId, poolAddress: pool, status: "preparing" as const }))

@@ -174,6 +174,12 @@ export function getPayerPublicKey(): string {
   return Keypair.fromSecretKey(bs58.decode(privKeyB58)).publicKey.toBase58();
 }
 
+export function getPoolCreatorPublicKey(): string {
+  const privKeyB58 = process.env.ORYNTH_POOL_CREATOR_WALLET;
+  if (!privKeyB58) throw new Error("ORYNTH_POOL_CREATOR_WALLET not configured");
+  return Keypair.fromSecretKey(bs58.decode(privKeyB58)).publicKey.toBase58();
+}
+
 // ─── Submit ──────────────────────────────────────────────────────────────────
 // POST /api/v1/launches/submit
 
