@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchWithAuth } from "@/lib/auth";
-import { motion } from "motion/react";
-import { ArrowLeft, ExternalLink, ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown, Copy, Check } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { motion, AnimatePresence } from "motion/react";
+import { ArrowLeft, ArrowRightLeft, RefreshCw, TrendingUp, TrendingDown, Copy, Check, Wallet, X, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TradingModal from "@/components/TradingModal";
 import PriceChart from "@/components/PriceChart";
 import type { FeedPost } from "@/components/FeedCard";
 import { cn } from "@/lib/utils";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 type TokenPair = {
   priceUsd: string;
@@ -125,6 +128,10 @@ function ChartEmbed({ poolAddress, mintAddress }: { poolAddress: string | null; 
 function TokenDetailsPage() {
   const { tokenId } = Route.useParams();
   const navigate = Route.useNavigate();
+  const { user } = useAuth();
+  const { connected, publicKey } = useWallet();
+  const { setVisible: openWalletModal } = useWalletModal();
+  const pendingClaimRef = useRef(false);
   const [post, setPost] = useState<FeedPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,6 +141,9 @@ function TokenDetailsPage() {
   const [poolAddress, setPoolAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [creatorEarnings, setCreatorEarnings] = useState<string>("0");
+  const [claiming, setClaiming] = useState(false);
+  const [claimResult, setClaimResult] = useState<{ success: boolean; amount?: string; error?: string } | null>(null);
+  const [showClaimConfirm, setShowClaimConfirm] = useState(false);
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
     try {
@@ -179,6 +189,50 @@ function TokenDetailsPage() {
     }, 30_000);
     return () => clearInterval(interval);
   }, [post?.tokenMintAddress]);
+
+  const isCreator = !!(
+    user?.username &&
+    post?.author &&
+    user.username.toLowerCase() === post.author.toLowerCase()
+  );
+
+  // When wallet connects while a claim was pending, open the confirm dialog
+  useEffect(() => {
+    if (connected && pendingClaimRef.current) {
+      pendingClaimRef.current = false;
+      setShowClaimConfirm(true);
+    }
+  }, [connected]);
+
+  const handleClaimClick = () => {
+    if (!connected) {
+      pendingClaimRef.current = true;
+      openWalletModal(true);
+      return;
+    }
+    setShowClaimConfirm(true);
+  };
+
+  const handleConfirmClaim = useCallback(async () => {
+    if (!publicKey) return;
+    setShowClaimConfirm(false);
+    setClaiming(true);
+    setClaimResult(null);
+    try {
+      const res = await fetchWithAuth("/api/reward", {
+        method: "POST",
+        body: JSON.stringify({ tokenId, walletAddress: publicKey.toBase58() }),
+      });
+      const data = await res.json() as { success: boolean; amount?: string; signature?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Transfer failed");
+      setClaimResult({ success: true, amount: data.amount });
+      void fetchTokenDetails(false);
+    } catch (err) {
+      setClaimResult({ success: false, error: err instanceof Error ? err.message : "Claim failed" });
+    } finally {
+      setClaiming(false);
+    }
+  }, [publicKey, tokenId, fetchTokenDetails]);
 
   if (loading) {
     return (
@@ -298,12 +352,136 @@ function TokenDetailsPage() {
             className="order-1 lg:order-2 space-y-3"
           >
             {/* Creator earnings */}
-            {(
-              <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3">
-                <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest mb-1">Creator Earnings</p>
-                <p className="text-2xl font-bold text-white">${parseFloat(creatorEarnings).toFixed(2)} <span className="text-sm font-normal text-white/40">USDC</span></p>
-              </div>
-            )}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3 space-y-2.5">
+              <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest">Creator Earnings</p>
+              <p className="text-2xl font-bold text-white">
+                ${parseFloat(creatorEarnings).toFixed(2)}{" "}
+                <span className="text-sm font-normal text-white/40">USDC</span>
+              </p>
+
+              {connected && publicKey && (
+                <div className="rounded-lg bg-white/[0.04] border border-white/[0.08] px-2.5 py-2 space-y-0.5">
+                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-semibold">Receiving wallet</p>
+                  <p className="text-[11px] font-mono text-white/70 break-all">{publicKey.toBase58()}</p>
+                </div>
+              )}
+
+              {claimResult?.success && (
+                <p className="text-[11px] text-green-400 font-medium">
+                  ✓ Claimed {claimResult.amount ? `$${claimResult.amount}` : ""} USDC
+                </p>
+              )}
+              {claimResult && !claimResult.success && (
+                <p className="text-[11px] text-red-400 font-medium">
+                  {claimResult.error ?? "Claim failed — try again later"}
+                </p>
+              )}
+
+              {/* Claim button — logic extracted from IIFE for readability */}
+              {(() => {
+                const earningsNum  = parseFloat(creatorEarnings);
+                const canClaim     = isCreator && earningsNum > 0;
+                const claimLabel   = claiming
+                  ? "Claiming…"
+                  : !user
+                    ? "Sign in to claim"
+                    : !connected
+                      ? "Connect Wallet to Claim"
+                      : "Claim Earnings";
+                const claimTitle   = !user
+                  ? "Sign in to claim earnings"
+                  : !isCreator
+                    ? `Only u/${post?.author ?? "the original creator"} can claim these earnings`
+                    : earningsNum <= 0
+                      ? "No earnings to claim yet"
+                      : undefined;
+
+                return (
+                  <button
+                    disabled={!canClaim || claiming}
+                    onClick={handleClaimClick}
+                    title={claimTitle}
+                    className={cn(
+                      "w-full rounded-lg py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                      canClaim && !claiming
+                        ? "bg-[#00FFD1] text-black hover:bg-[#00FFD1]/85 cursor-pointer"
+                        : "bg-white/[0.04] text-white/25 cursor-not-allowed border border-white/[0.08]",
+                    )}
+                  >
+                    {!connected && canClaim && <Wallet className="w-3 h-3" />}
+                    {claimLabel}
+                  </button>
+                );
+              })()}
+            </div>
+
+            {/* Claim confirmation modal */}
+            <AnimatePresence>
+              {showClaimConfirm && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center px-4"
+                >
+                  <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowClaimConfirm(false)} />
+                  <motion.div
+                    initial={{ scale: 0.95, y: 8 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.95, y: 8 }}
+                    className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0e0e0e] shadow-2xl p-6 space-y-4"
+                  >
+                    <button
+                      onClick={() => setShowClaimConfirm(false)}
+                      className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-[#00FFD1]/10 border border-[#00FFD1]/20 flex items-center justify-center">
+                        <Wallet className="w-4 h-4 text-[#00FFD1]" />
+                      </div>
+                      <h3 className="text-base font-bold text-white">Confirm Claim</h3>
+                    </div>
+
+                    <p className="text-sm text-white/60 leading-relaxed">
+                      Are you sure you want to claim your creator earnings?
+                    </p>
+
+                    <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 space-y-1">
+                      <p className="text-[10px] text-white/35 uppercase tracking-widest font-semibold">Receiving wallet</p>
+                      <p className="text-xs font-mono text-white/80 break-all">
+                        {publicKey?.toBase58()}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-[#00FFD1]/5 border border-[#00FFD1]/15 p-3 flex items-start gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-[#00FFD1]/70 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-[#00FFD1]/70 leading-relaxed">
+                        Earnings will be sent to the wallet address above. Make sure this is correct before confirming.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        onClick={() => setShowClaimConfirm(false)}
+                        className="flex-1 rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 text-sm text-white/60 hover:text-white py-2.5 transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={claiming}
+                        onClick={handleConfirmClaim}
+                        className="flex-1 rounded-xl bg-[#00FFD1] hover:bg-[#00FFD1]/85 text-black text-sm font-bold py-2.5 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {claiming ? "Claiming…" : "Yes, Claim"}
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Trade */}
             {isOnChain ? (

@@ -2,8 +2,10 @@ import { Router } from "express";
 import { RedditService } from "../services/reddit.service";
 import { db } from "../db";
 import * as schema from "../db";
-import { eq, desc, asc, and, gte, ilike, inArray, or, sql } from "drizzle-orm";
-import { getEarnings } from "../services/orynth.service";
+import { eq, desc, asc, and, gte, ilike, inArray, or } from "drizzle-orm";
+import * as Orynth from "../services/orynth.service";
+import { authenticateToken } from "../middleware/auth";
+import { resolvePostById } from "../db/helpers";
 
 const { posts, launches } = schema;
 const router = Router();
@@ -523,8 +525,8 @@ router.get("/:id/creator-earnings", async (req, res) => {
       return res.json({ success: true, earningsUsdc: "0", poolAddress: null });
     }
 
-    const earningsRes = await getEarnings([launch.poolAddress]);
-    const earning     = earningsRes.earnings?.[0];
+    const earningsRes = await Orynth.getEarnings([launch.poolAddress]);
+    const earning = earningsRes.earnings?.[0];
 
     if (!earning) {
       return res.json({ success: true, earningsUsdc: "0", poolAddress: launch.poolAddress });
@@ -544,6 +546,72 @@ router.get("/:id/creator-earnings", async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching creator earnings:", err);
     res.status(500).json({ success: false, error: "Failed to fetch creator earnings" });
+  }
+});
+
+/**
+ * POST /api/posts/:id/claim-creator-earnings
+ * Only the original Reddit post author (matched by Reddit username) can trigger this.
+ * Calls Orynth to claim accrued USDC trading fees for the pool into the platform wallet.
+ * (The /api/reward endpoint then handles forwarding the creator's share to their wallet.)
+ */
+router.post("/:id/claim-creator-earnings", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
+
+    const id = req.params["id"] as string;
+
+    // 1. Resolve logged-in user
+    const [dbUser] = await db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1);
+    if (!dbUser) return res.status(401).json({ success: false, error: "User not found" });
+
+    // 2. Resolve post via shared helper (slug → legacy → uuid/mint/symbol)
+    const post = await resolvePostById(id);
+    if (!post) return res.status(404).json({ success: false, error: "Post not found" });
+
+    // 3. Only the original Reddit post author can claim
+    if (!dbUser.username || dbUser.username.toLowerCase() !== post.author.toLowerCase()) {
+      return res.status(403).json({ success: false, error: "Only the original post creator can claim earnings" });
+    }
+
+    // 4. Find confirmed launch for this post
+    const [launch] = await db
+      .select({ poolAddress: launches.poolAddress })
+      .from(launches)
+      .where(and(eq(launches.status, "confirmed"), eq(launches.sourceId, post.redditPostId)))
+      .limit(1);
+
+    if (!launch?.poolAddress) {
+      return res.status(404).json({ success: false, error: "No active pool found for this token" });
+    }
+
+    // 5. Prepare → sign → submit claim via Orynth
+    const prepared = await Orynth.prepareEarningsClaim([launch.poolAddress]);
+    if (!prepared.transactions?.length) {
+      return res.status(400).json({ success: false, error: "No claimable earnings at this time", skipped: prepared.skipped });
+    }
+
+    const signedTransactions = prepared.transactions.map((tx) => ({
+      poolAddress: tx.poolAddress,
+      signedTxHex: Orynth.signClaimTx(tx.txHex),
+    }));
+
+    const submitted = await Orynth.submitEarningsClaim(prepared.claimBatchId, signedTransactions);
+
+    const totalClaimed = prepared.transactions
+      .reduce((sum, t) => sum + parseFloat(t.claimableUsdc || "0"), 0)
+      .toFixed(4);
+
+    return res.json({
+      success: true,
+      claimBatchId: prepared.claimBatchId,
+      totalClaimed,
+      results: submitted.results ?? [],
+    });
+  } catch (err) {
+    console.error("❌ Creator claim error:", err);
+    res.status(500).json({ success: false, error: err instanceof Error ? err.message : "Claim failed" });
   }
 });
 

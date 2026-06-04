@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "@tanstack/react-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { Menu, X, LogOut, UserRound, Flame } from "lucide-react";
+import WalletButton from "@/components/WalletButton";
 
 const navLinks = [
   { label: "Feed", to: "/home" },
@@ -72,6 +73,11 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Wallet connect — always visible on desktop */}
+            <div className="hidden md:block">
+              <WalletButton />
+            </div>
+
             {/* Desktop: full user profile */}
             {isAuthenticated && user ? (
               <>
@@ -146,6 +152,10 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+
+          <div className="pt-1 pb-2">
+            <WalletButton />
+          </div>
 
           {!isAuthenticated && (
             <Link

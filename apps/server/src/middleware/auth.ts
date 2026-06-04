@@ -1,6 +1,14 @@
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
+
 /**
  * Middleware to authenticate JWT tokens
  */
@@ -32,7 +40,7 @@ export function authenticateToken(
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     
     // Attach user ID to request object
-    (req as any).userId = decoded.userId;
+    req.userId = decoded.userId;
     
     next();
   } catch (error) {
@@ -66,7 +74,7 @@ export function optionalAuth(
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    (req as any).userId = decoded.userId;
+    req.userId = decoded.userId;
   } catch (error) {
     // Don't fail, just continue without user
     console.log("Optional auth failed, continuing without user");
