@@ -5,6 +5,7 @@ import * as schema from "../db";
 import { eq, desc, asc, and, gte, ilike, inArray, or } from "drizzle-orm";
 import * as Orynth from "../services/orynth.service";
 import { authenticateToken } from "../middleware/auth";
+import { resolvePostById } from "../db/helpers";
 
 const { posts, launches } = schema;
 const router = Router();
@@ -551,42 +552,22 @@ router.get("/:id/creator-earnings", async (req, res) => {
 /**
  * POST /api/posts/:id/claim-creator-earnings
  * Only the original Reddit post author (matched by Reddit username) can trigger this.
- * Calls Orynth to claim accrued USDC trading fees for the pool.
+ * Calls Orynth to claim accrued USDC trading fees for the pool into the platform wallet.
+ * (The /api/reward endpoint then handles forwarding the creator's share to their wallet.)
  */
 router.post("/:id/claim-creator-earnings", authenticateToken, async (req, res) => {
   try {
-    const userId = (req as any).userId as string;
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
+
     const id = req.params["id"] as string;
 
     // 1. Resolve logged-in user
     const [dbUser] = await db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1);
     if (!dbUser) return res.status(401).json({ success: false, error: "User not found" });
 
-    // 2. Resolve post (slug → legacy mint-prefix → uuid/mint/symbol)
-    let post: typeof posts.$inferSelect | undefined;
-
-    if (!post) {
-      const [r] = await db.select().from(posts).where(eq(posts.tokenSlug, id)).limit(1);
-      post = r;
-    }
-
-    if (!post) {
-      const dashIdx = id.lastIndexOf("-");
-      if (dashIdx > 0) {
-        const sym = id.slice(0, dashIdx);
-        const shortMint = id.slice(dashIdx + 1);
-        if (shortMint.length === 6) {
-          const [r] = await db.select().from(posts)
-            .where(and(ilike(posts.tokenSymbol, sym), ilike(posts.tokenMintAddress, `${shortMint}%`))).limit(1);
-          post = r;
-        }
-      }
-    }
-    if (!post) {
-      const [r] = await db.select().from(posts)
-        .where(or(eq(posts.id, id), eq(posts.tokenMintAddress, id), ilike(posts.tokenSymbol, id))).limit(1);
-      post = r;
-    }
+    // 2. Resolve post via shared helper (slug → legacy → uuid/mint/symbol)
+    const post = await resolvePostById(id);
     if (!post) return res.status(404).json({ success: false, error: "Post not found" });
 
     // 3. Only the original Reddit post author can claim

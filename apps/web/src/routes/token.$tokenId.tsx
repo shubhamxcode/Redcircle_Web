@@ -142,7 +142,7 @@ function TokenDetailsPage() {
   const [copied, setCopied] = useState(false);
   const [creatorEarnings, setCreatorEarnings] = useState<string>("0");
   const [claiming, setClaiming] = useState(false);
-  const [claimResult, setClaimResult] = useState<{ success: boolean; amount?: string } | null>(null);
+  const [claimResult, setClaimResult] = useState<{ success: boolean; amount?: string; error?: string } | null>(null);
   const [showClaimConfirm, setShowClaimConfirm] = useState(false);
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
@@ -212,6 +212,27 @@ function TokenDetailsPage() {
     }
     setShowClaimConfirm(true);
   };
+
+  const handleConfirmClaim = useCallback(async () => {
+    if (!publicKey) return;
+    setShowClaimConfirm(false);
+    setClaiming(true);
+    setClaimResult(null);
+    try {
+      const res = await fetchWithAuth("/api/reward", {
+        method: "POST",
+        body: JSON.stringify({ tokenId, walletAddress: publicKey.toBase58() }),
+      });
+      const data = await res.json() as { success: boolean; amount?: string; signature?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Transfer failed");
+      setClaimResult({ success: true, amount: data.amount });
+      void fetchTokenDetails(false);
+    } catch (err) {
+      setClaimResult({ success: false, error: err instanceof Error ? err.message : "Claim failed" });
+    } finally {
+      setClaiming(false);
+    }
+  }, [publicKey, tokenId, fetchTokenDetails]);
 
   if (loading) {
     return (
@@ -352,7 +373,7 @@ function TokenDetailsPage() {
               )}
               {claimResult && !claimResult.success && (
                 <p className="text-[11px] text-red-400 font-medium">
-                  Claim failed — try again later
+                  {claimResult.error ?? "Claim failed — try again later"}
                 </p>
               )}
 
@@ -366,7 +387,7 @@ function TokenDetailsPage() {
                 const buttonTitle = !user
                   ? "Sign in to claim earnings"
                   : !isCreator
-                    ? `Only u/${post.author} can claim these earnings`
+                    ? `Only u/${post?.author ?? "the original creator"} can claim these earnings`
                     : undefined;
 
                 return (
@@ -445,34 +466,7 @@ function TokenDetailsPage() {
                       </button>
                       <button
                         disabled={claiming}
-                        onClick={async () => {
-                          if (!publicKey) return;
-                          setShowClaimConfirm(false);
-                          setClaiming(true);
-                          setClaimResult(null);
-                          try {
-                            const res = await fetchWithAuth("/api/reward", {
-                              method: "POST",
-                              body: JSON.stringify({
-                                tokenId,
-                                walletAddress: publicKey.toBase58(),
-                              }),
-                            });
-                            const data = await res.json() as {
-                              success: boolean;
-                              amount?: string;
-                              signature?: string;
-                              error?: string;
-                            };
-                            if (!res.ok) throw new Error(data.error || "Transfer failed");
-                            setClaimResult({ success: true, amount: data.amount });
-                            void fetchTokenDetails(false);
-                          } catch (err) {
-                            setClaimResult({ success: false });
-                          } finally {
-                            setClaiming(false);
-                          }
-                        }}
+                        onClick={handleConfirmClaim}
                         className="flex-1 rounded-xl bg-[#00FFD1] hover:bg-[#00FFD1]/85 text-black text-sm font-bold py-2.5 transition-all cursor-pointer disabled:opacity-50"
                       >
                         {claiming ? "Claiming…" : "Yes, Claim"}
