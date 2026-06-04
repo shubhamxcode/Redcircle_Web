@@ -368,7 +368,7 @@ function TokenDetailsPage() {
 
               {claimResult?.success && (
                 <p className="text-[11px] text-green-400 font-medium">
-                  ✓ Claimed ${claimResult.amount ?? "0"} USDC
+                  ✓ Claimed {claimResult.amount ? `$${claimResult.amount}` : ""} USDC
                 </p>
               )}
               {claimResult && !claimResult.success && (
@@ -377,24 +377,30 @@ function TokenDetailsPage() {
                 </p>
               )}
 
+              {/* Claim button — logic extracted from IIFE for readability */}
               {(() => {
-                const canClaim = isCreator;
-                const label = !user
-                  ? "Sign in to claim"
-                  : !connected
-                    ? "Connect Wallet to Claim"
-                    : "Claim Earnings";
-                const buttonTitle = !user
+                const earningsNum  = parseFloat(creatorEarnings);
+                const canClaim     = isCreator && earningsNum > 0;
+                const claimLabel   = claiming
+                  ? "Claiming…"
+                  : !user
+                    ? "Sign in to claim"
+                    : !connected
+                      ? "Connect Wallet to Claim"
+                      : "Claim Earnings";
+                const claimTitle   = !user
                   ? "Sign in to claim earnings"
                   : !isCreator
                     ? `Only u/${post?.author ?? "the original creator"} can claim these earnings`
-                    : undefined;
+                    : earningsNum <= 0
+                      ? "No earnings to claim yet"
+                      : undefined;
 
                 return (
                   <button
                     disabled={!canClaim || claiming}
                     onClick={handleClaimClick}
-                    title={buttonTitle}
+                    title={claimTitle}
                     className={cn(
                       "w-full rounded-lg py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5",
                       canClaim && !claiming
@@ -403,7 +409,7 @@ function TokenDetailsPage() {
                     )}
                   >
                     {!connected && canClaim && <Wallet className="w-3 h-3" />}
-                    {label}
+                    {claimLabel}
                   </button>
                 );
               })()}
