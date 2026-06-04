@@ -347,7 +347,7 @@ function TokenDetailsPage() {
 
               {claimResult?.success && (
                 <p className="text-[11px] text-green-400 font-medium">
-                  ✓ Claimed ${claimResult.amount} USDC
+                  ✓ Claimed ${claimResult.amount ?? "0"} USDC
                 </p>
               )}
               {claimResult && !claimResult.success && (
@@ -363,18 +363,17 @@ function TokenDetailsPage() {
                   : !connected
                     ? "Connect Wallet to Claim"
                     : "Claim Earnings";
+                const buttonTitle = !user
+                  ? "Sign in to claim earnings"
+                  : !isCreator
+                    ? `Only u/${post.author} can claim these earnings`
+                    : undefined;
 
                 return (
                   <button
                     disabled={!canClaim || claiming}
                     onClick={handleClaimClick}
-                    title={
-                      !user
-                        ? "Sign in to claim earnings"
-                        : !isCreator
-                          ? `Only u/${post.author} can claim these earnings`
-                          : undefined
-                    }
+                    title={buttonTitle}
                     className={cn(
                       "w-full rounded-lg py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5",
                       canClaim && !claiming

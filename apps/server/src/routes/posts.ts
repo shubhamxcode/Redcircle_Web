@@ -525,7 +525,7 @@ router.get("/:id/creator-earnings", async (req, res) => {
     }
 
     const earningsRes = await Orynth.getEarnings([launch.poolAddress]);
-    const earning     = earningsRes.earnings?.[0];
+    const earning = earningsRes.earnings?.[0];
 
     if (!earning) {
       return res.json({ success: true, earningsUsdc: "0", poolAddress: launch.poolAddress });
