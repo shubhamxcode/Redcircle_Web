@@ -7,8 +7,9 @@ type Entry = {
   id: string;
   user: string;
   avatar?: string;
-  pnl: number;    // creator USDC earnings (50% of partner fees)
-  volume: number; // total trading volume in SOL
+  pnl: number;           // creator USDC earnings
+  curatorEarned: number; // curator USDC earnings (0 for old posts)
+  volume: number;        // total trading volume in USDC
 };
 
 export default function Leaderboard() {
@@ -61,10 +62,19 @@ export default function Leaderboard() {
       </div>
 
       <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-white/10">
+        {/* Header */}
         <div className="grid grid-cols-12 bg-white/[0.04] px-4 py-2 text-xs text-white/60">
-          <div className="col-span-6">Creator</div>
-          <div className="col-span-3 text-right">Earned (USDC)</div>
-          <div className="col-span-3 text-right">Volume (SOL)</div>
+          <div className="col-span-5">Creator</div>
+          <div className="col-span-2 text-right">Creator</div>
+          <div className="col-span-2 text-right hidden sm:block">Curator</div>
+          <div className="col-span-3 text-right">Volume</div>
+        </div>
+        {/* Sub-header units */}
+        <div className="grid grid-cols-12 bg-white/[0.02] px-4 py-1 text-[10px] text-white/30">
+          <div className="col-span-5" />
+          <div className="col-span-2 text-right">USDC</div>
+          <div className="col-span-2 text-right hidden sm:block">USDC</div>
+          <div className="col-span-3 text-right">USDC</div>
         </div>
 
         {loading ? (
@@ -85,7 +95,7 @@ export default function Leaderboard() {
           <ul className="divide-y divide-white/10">
             {data.map((e) => (
               <li key={e.id} className="grid grid-cols-12 items-center bg-black/60 px-4 py-3 backdrop-blur">
-                <div className="col-span-6 flex items-center gap-3 min-w-0">
+                <div className="col-span-5 flex items-center gap-3 min-w-0">
                   <span className="w-5 shrink-0 text-white/40 text-sm">{e.rank}</span>
                   {e.avatar ? (
                     <img src={e.avatar} alt={e.user} className="w-7 h-7 rounded-full object-cover shrink-0 border border-white/10" />
@@ -96,10 +106,16 @@ export default function Leaderboard() {
                   )}
                   <span className="truncate text-white/90 text-sm">u/{e.user}</span>
                 </div>
-                <div className="col-span-3 text-right font-medium text-emerald-400">
+                <div className="col-span-2 text-right font-medium text-emerald-400 text-sm">
                   ${e.pnl.toFixed(2)}
                 </div>
-                <div className="col-span-3 text-right text-white/70">{e.volume.toFixed(2)} SOL</div>
+                <div className="col-span-2 text-right hidden sm:block text-sm">
+                  {e.curatorEarned > 0
+                    ? <span className="text-violet-400">${e.curatorEarned.toFixed(2)}</span>
+                    : <span className="text-white/20">—</span>
+                  }
+                </div>
+                <div className="col-span-3 text-right text-white/70 text-sm">${e.volume.toFixed(2)}</div>
               </li>
             ))}
           </ul>

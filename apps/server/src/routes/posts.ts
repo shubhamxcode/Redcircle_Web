@@ -539,7 +539,10 @@ router.get("/:id/creator-earnings", async (req, res) => {
     const creatorBps  = launch.creatorFeeBps ?? 40;
     const curatorBps  = launch.curatorFeeBps ?? 15;
     const creatorUsdc = totalUsdc * (partnerBps > 0 ? creatorBps / partnerBps : 0);
-    const curatorUsdc = totalUsdc * (partnerBps > 0 ? curatorBps / partnerBps : 0);
+    // Only show curator earnings when a curator wallet was registered at launch
+    const curatorUsdc = launch.curatorWalletAddress
+      ? totalUsdc * (partnerBps > 0 ? curatorBps / partnerBps : 0)
+      : 0;
 
     return res.json({
       success:             true,

@@ -8,25 +8,6 @@ const { launches, users } = schema;
 
 const router = Router();
 
-// Simple in-memory SOL price cache (5-minute TTL)
-let solPriceCache: { usd: number; fetchedAt: number } | null = null;
-
-async function getSolPriceUsd(): Promise<number> {
-  const TTL = 5 * 60 * 1000;
-  if (solPriceCache && Date.now() - solPriceCache.fetchedAt < TTL) {
-    return solPriceCache.usd;
-  }
-  try {
-    const res  = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-    const data = await res.json() as { solana?: { usd?: number } };
-    const price = data?.solana?.usd ?? 0;
-    if (price > 0) solPriceCache = { usd: price, fetchedAt: Date.now() };
-    return price;
-  } catch {
-    return solPriceCache?.usd ?? 0;
-  }
-}
-
 /**
  * GET /api/leaderboard
  * Returns top creators ranked by USDC earnings.
@@ -44,12 +25,14 @@ router.get("/", async (req, res) => {
     //    they just won't have an avatar.
     const rows = await db
       .select({
-        poolAddress:     launches.poolAddress,
-        creatorUsername: launches.creatorUsername,
-        creatorFeeBps:   launches.creatorFeeBps,
-        partnerFeeBps:   launches.partnerFeeBps,
-        userId:          users.id,
-        avatarUrl:       users.avatarUrl,
+        poolAddress:          launches.poolAddress,
+        creatorUsername:      launches.creatorUsername,
+        creatorFeeBps:        launches.creatorFeeBps,
+        curatorFeeBps:        launches.curatorFeeBps,
+        curatorWalletAddress: launches.curatorWalletAddress,
+        partnerFeeBps:        launches.partnerFeeBps,
+        userId:               users.id,
+        avatarUrl:            users.avatarUrl,
       })
       .from(launches)
       .leftJoin(
@@ -68,22 +51,20 @@ router.get("/", async (req, res) => {
       return res.json({ success: true, category: "author", data: [] });
     }
 
-    // 2. Fetch SOL price and Orynth earnings in parallel
+    // 2. Fetch Orynth earnings
     const poolAddresses = [...new Set(rows.map((r) => r.poolAddress!))];
-    const [solPrice, earningsRes] = await Promise.all([
-      getSolPriceUsd(),
-      getEarnings(poolAddresses),
-    ]);
+    const earningsRes = await getEarnings(poolAddresses);
     const earningsMap = new Map(
       (earningsRes.earnings ?? []).map((e) => [e.poolAddress, e]),
     );
 
     // 3. Group by creatorUsername (userId may be null for unregistered creators)
     const creatorMap = new Map<string, {
-      userId:           string | null;
-      avatarUrl:        string | null;
-      totalUsdcEarned:  number;
-      totalVolumeUsdc:  number;
+      userId:              string | null;
+      avatarUrl:           string | null;
+      totalUsdcEarned:     number;
+      totalCuratorEarned:  number;
+      totalVolumeUsdc:     number;
     }>();
 
     for (const row of rows) {
@@ -94,30 +75,32 @@ router.get("/", async (req, res) => {
           parseFloat(earning.claimableUsdc ?? "0")
         : 0;
 
-      const creatorBps = row.creatorFeeBps ?? 50;
       const partnerBps = row.partnerFeeBps ?? 105;
-      const share      = partnerBps > 0 ? creatorBps / partnerBps : 0.5;
-      const earned     = totalUsdc * share;
-
-      // Derive trading volume in SOL:
-      // partnerUsdc / feeRate = volumeUsdc, then / solPrice = volumeSol
-      const volumeUsdc = partnerBps > 0 ? totalUsdc / (partnerBps / 10000) : 0;
-      const tradingVolume = solPrice > 0 ? volumeUsdc / solPrice : 0;
+      const creatorBps = row.creatorFeeBps ?? 40;
+      const curatorBps = row.curatorFeeBps ?? 15;
+      const creatorEarned = totalUsdc * (partnerBps > 0 ? creatorBps / partnerBps : 0);
+      // Only count curator earnings for posts that actually have a curator wallet registered
+      const curatorEarned = row.curatorWalletAddress
+        ? totalUsdc * (partnerBps > 0 ? curatorBps / partnerBps : 0)
+        : 0;
+      const volumeUsdc     = partnerBps > 0 ? totalUsdc / (partnerBps / 10000) : 0;
 
       const existing = creatorMap.get(username);
       if (existing) {
-        existing.totalUsdcEarned += earned;
-        existing.totalVolumeUsdc += tradingVolume;
+        existing.totalUsdcEarned    += creatorEarned;
+        existing.totalCuratorEarned += curatorEarned;
+        existing.totalVolumeUsdc    += volumeUsdc;
         if (!existing.userId && row.userId) {
           existing.userId    = row.userId;
           existing.avatarUrl = row.avatarUrl;
         }
       } else {
         creatorMap.set(username, {
-          userId:           row.userId,
-          avatarUrl:        row.avatarUrl,
-          totalUsdcEarned:  earned,
-          totalVolumeUsdc:  tradingVolume,
+          userId:             row.userId,
+          avatarUrl:          row.avatarUrl,
+          totalUsdcEarned:    creatorEarned,
+          totalCuratorEarned: curatorEarned,
+          totalVolumeUsdc:    volumeUsdc,
         });
       }
     }
@@ -127,13 +110,14 @@ router.get("/", async (req, res) => {
       .sort(([, a], [, b]) => b.totalUsdcEarned - a.totalUsdcEarned)
       .slice(0, limit)
       .map(([username, c], index) => ({
-        rank:     index + 1,
-        id:       c.userId ?? username,
-        user:     username,
-        avatar:   c.avatarUrl,
-        pnl:      parseFloat(c.totalUsdcEarned.toFixed(4)),
-        volume:   parseFloat(c.totalVolumeUsdc.toFixed(2)),
-        category: "author" as const,
+        rank:          index + 1,
+        id:            c.userId ?? username,
+        user:          username,
+        avatar:        c.avatarUrl,
+        pnl:           parseFloat(c.totalUsdcEarned.toFixed(4)),
+        curatorEarned: parseFloat(c.totalCuratorEarned.toFixed(4)),
+        volume:        parseFloat(c.totalVolumeUsdc.toFixed(2)),
+        category:      "author" as const,
       }));
 
     return res.json({ success: true, category: "author", data });
