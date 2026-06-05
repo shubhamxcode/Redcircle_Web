@@ -179,8 +179,9 @@ router.post("/prepare", async (req: Request, res: Response) => {
       redditThumbnail: z.string().url().optional(),
       tokenName:       z.string().min(1).max(32),
       tokenSymbol:     z.string().min(1).max(10),
-      description:     z.string().max(500).optional(),
-      imageUrl:        z.string().url().optional(),
+      description:          z.string().max(500).optional(),
+      imageUrl:             z.string().url().optional(),
+      curatorWalletAddress: z.string().min(32).max(44).optional(),
     }).parse(req.body);
 
     // Server wallet pays — one token per Reddit post
@@ -259,6 +260,7 @@ router.post("/prepare", async (req: Request, res: Response) => {
       partnerFeeBps:         orynthLaunch.feeConfig.partnerFeeBps,
       creatorFeeBps:         orynthLaunch.feeConfig.suggestedCreatorShareBps,
       platformFeeBps:        orynthLaunch.feeConfig.suggestedPartnerShareBps,
+      curatorWalletAddress:  body.curatorWalletAddress ?? null,
       status:                "submitting",
     })
     .onConflictDoUpdate({

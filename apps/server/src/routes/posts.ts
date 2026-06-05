@@ -508,9 +508,11 @@ router.get("/:id/creator-earnings", async (req, res) => {
     // Look up the launch by mint address or reddit post id
     const [launch] = await db
       .select({
-        poolAddress:   launches.poolAddress,
-        creatorFeeBps: launches.creatorFeeBps,
-        partnerFeeBps: launches.partnerFeeBps,
+        poolAddress:          launches.poolAddress,
+        creatorFeeBps:        launches.creatorFeeBps,
+        curatorFeeBps:        launches.curatorFeeBps,
+        partnerFeeBps:        launches.partnerFeeBps,
+        curatorWalletAddress: launches.curatorWalletAddress,
       })
       .from(launches)
       .where(
@@ -522,26 +524,29 @@ router.get("/:id/creator-earnings", async (req, res) => {
       .limit(1);
 
     if (!launch?.poolAddress) {
-      return res.json({ success: true, earningsUsdc: "0", poolAddress: null });
+      return res.json({ success: true, earningsUsdc: "0", curatorEarningsUsdc: "0", poolAddress: null });
     }
 
     const earningsRes = await Orynth.getEarnings([launch.poolAddress]);
     const earning = earningsRes.earnings?.[0];
 
     if (!earning) {
-      return res.json({ success: true, earningsUsdc: "0", poolAddress: launch.poolAddress });
+      return res.json({ success: true, earningsUsdc: "0", curatorEarningsUsdc: "0", poolAddress: launch.poolAddress });
     }
 
-    const totalUsdc  = parseFloat(earning.claimedUsdc ?? "0") + parseFloat(earning.claimableUsdc ?? "0");
-    const creatorBps = launch.creatorFeeBps ?? 50;
-    const partnerBps = launch.partnerFeeBps ?? 105;
-    const share      = partnerBps > 0 ? creatorBps / partnerBps : 0.5;
-    const creatorUsdc = totalUsdc * share;
+    const totalUsdc   = parseFloat(earning.claimedUsdc ?? "0") + parseFloat(earning.claimableUsdc ?? "0");
+    const partnerBps  = launch.partnerFeeBps ?? 105;
+    const creatorBps  = launch.creatorFeeBps ?? 40;
+    const curatorBps  = launch.curatorFeeBps ?? 15;
+    const creatorUsdc = totalUsdc * (partnerBps > 0 ? creatorBps / partnerBps : 0);
+    const curatorUsdc = totalUsdc * (partnerBps > 0 ? curatorBps / partnerBps : 0);
 
     return res.json({
-      success:      true,
-      earningsUsdc: creatorUsdc.toFixed(4),
-      poolAddress:  launch.poolAddress,
+      success:             true,
+      earningsUsdc:        creatorUsdc.toFixed(4),
+      curatorEarningsUsdc: curatorUsdc.toFixed(4),
+      curatorWalletSet:    !!launch.curatorWalletAddress,
+      poolAddress:         launch.poolAddress,
     });
   } catch (err) {
     console.error("❌ Error fetching creator earnings:", err);

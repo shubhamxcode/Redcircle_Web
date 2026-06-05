@@ -132,6 +132,7 @@ function TokenDetailsPage() {
   const { connected, publicKey } = useWallet();
   const { setVisible: openWalletModal } = useWalletModal();
   const pendingClaimRef = useRef(false);
+  const pendingCuratorClaimRef = useRef(false);
   const [post, setPost] = useState<FeedPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,9 +142,14 @@ function TokenDetailsPage() {
   const [poolAddress, setPoolAddress] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [creatorEarnings, setCreatorEarnings] = useState<string>("0");
+  const [curatorEarnings, setCuratorEarnings] = useState<string>("0");
+  const [curatorWalletSet, setCuratorWalletSet] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [claimResult, setClaimResult] = useState<{ success: boolean; amount?: string; error?: string } | null>(null);
   const [showClaimConfirm, setShowClaimConfirm] = useState(false);
+  const [curatorClaiming, setCuratorClaiming] = useState(false);
+  const [curatorClaimResult, setCuratorClaimResult] = useState<{ success: boolean; amount?: string; error?: string } | null>(null);
+  const [showCuratorClaimConfirm, setShowCuratorClaimConfirm] = useState(false);
 
   const fetchTokenDetails = useCallback(async (showLoading = true) => {
     try {
@@ -162,8 +168,10 @@ function TokenDetailsPage() {
       // Fetch creator earnings — also gives us the pool address for free
       try {
         const erRes  = await fetch(`${getApiUrl()}/api/posts/${tokenId}/creator-earnings`);
-        const erData = await erRes.json() as { success: boolean; earningsUsdc?: string; poolAddress?: string };
+        const erData = await erRes.json() as { success: boolean; earningsUsdc?: string; curatorEarningsUsdc?: string; curatorWalletSet?: boolean; poolAddress?: string };
         if (erData.success && erData.earningsUsdc != null) setCreatorEarnings(erData.earningsUsdc);
+        if (erData.success && erData.curatorEarningsUsdc != null) setCuratorEarnings(erData.curatorEarningsUsdc);
+        if (erData.curatorWalletSet != null) setCuratorWalletSet(erData.curatorWalletSet);
         if (erData.poolAddress) setPoolAddress(erData.poolAddress);
       } catch { /* non-critical */ }
 
@@ -196,11 +204,16 @@ function TokenDetailsPage() {
     user.username.toLowerCase() === post.author.toLowerCase()
   );
 
-  // When wallet connects while a claim was pending, open the confirm dialog
+  // When wallet connects while a claim was pending, open the relevant confirm dialog
   useEffect(() => {
-    if (connected && pendingClaimRef.current) {
+    if (!connected) return;
+    if (pendingClaimRef.current) {
       pendingClaimRef.current = false;
       setShowClaimConfirm(true);
+    }
+    if (pendingCuratorClaimRef.current) {
+      pendingCuratorClaimRef.current = false;
+      setShowCuratorClaimConfirm(true);
     }
   }, [connected]);
 
@@ -211,6 +224,15 @@ function TokenDetailsPage() {
       return;
     }
     setShowClaimConfirm(true);
+  };
+
+  const handleCuratorClaimClick = () => {
+    if (!connected) {
+      pendingCuratorClaimRef.current = true;
+      openWalletModal(true);
+      return;
+    }
+    setShowCuratorClaimConfirm(true);
   };
 
   const handleConfirmClaim = useCallback(async () => {
@@ -233,6 +255,28 @@ function TokenDetailsPage() {
       setClaiming(false);
     }
   }, [publicKey, tokenId, fetchTokenDetails]);
+
+  const handleCuratorClaim = useCallback(async () => {
+    if (!publicKey) return;
+    setShowCuratorClaimConfirm(false);
+    setCuratorClaiming(true);
+    setCuratorClaimResult(null);
+    try {
+      const { getApiUrl } = await import("@/lib/auth");
+      const res = await fetch(`${getApiUrl()}/api/curator-reward`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tokenId, walletAddress: publicKey.toBase58() }),
+      });
+      const data = await res.json() as { success: boolean; amount?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Curator claim failed");
+      setCuratorClaimResult({ success: true, amount: data.amount });
+    } catch (err) {
+      setCuratorClaimResult({ success: false, error: err instanceof Error ? err.message : "Claim failed" });
+    } finally {
+      setCuratorClaiming(false);
+    }
+  }, [publicKey, tokenId]);
 
   if (loading) {
     return (
@@ -359,13 +403,6 @@ function TokenDetailsPage() {
                 <span className="text-sm font-normal text-white/40">USDC</span>
               </p>
 
-              {connected && publicKey && (
-                <div className="rounded-lg bg-white/[0.04] border border-white/[0.08] px-2.5 py-2 space-y-0.5">
-                  <p className="text-[9px] text-white/30 uppercase tracking-widest font-semibold">Receiving wallet</p>
-                  <p className="text-[11px] font-mono text-white/70 break-all">{publicKey.toBase58()}</p>
-                </div>
-              )}
-
               {claimResult?.success && (
                 <p className="text-[11px] text-green-400 font-medium">
                   ✓ Claimed {claimResult.amount ? `$${claimResult.amount}` : ""} USDC
@@ -414,6 +451,50 @@ function TokenDetailsPage() {
                 );
               })()}
             </div>
+
+            {/* Curator reward — only shown for posts launched with a curator wallet */}
+            {curatorWalletSet && <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3 space-y-2.5">
+              <p className="text-[9px] font-semibold text-white/40 uppercase tracking-widest">Curator Reward</p>
+              <p className="text-2xl font-bold text-white">
+                ${parseFloat(curatorEarnings).toFixed(2)}{" "}
+                <span className="text-sm font-normal text-white/40">USDC</span>
+              </p>
+
+              <p className="text-[10px] text-white/30 leading-relaxed">
+                Connect the <span className="text-white/50 font-medium">same wallet</span> you used when tokenizing this post. A different wallet will be rejected.
+              </p>
+
+              {curatorClaimResult?.success && (
+                <p className="text-[11px] text-green-400 font-medium">
+                  ✓ Claimed {curatorClaimResult.amount ? `$${curatorClaimResult.amount}` : ""} USDC
+                </p>
+              )}
+              {curatorClaimResult && !curatorClaimResult.success && (
+                <p className="text-[11px] text-red-400 font-medium">
+                  {curatorClaimResult.error ?? "Claim failed — try again later"}
+                </p>
+              )}
+
+              {(() => {
+                const curatorEarningsNum = parseFloat(curatorEarnings);
+                const canClaimCurator    = curatorEarningsNum > 0 && !curatorClaiming;
+                return (
+                  <button
+                    disabled={!canClaimCurator}
+                    onClick={handleCuratorClaimClick}
+                    className={cn(
+                      "w-full rounded-lg py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+                      canClaimCurator
+                        ? "bg-white/10 hover:bg-white/15 border border-white/20 text-white cursor-pointer"
+                        : "bg-white/[0.04] text-white/25 cursor-not-allowed border border-white/[0.08]",
+                    )}
+                  >
+                    {!connected && canClaimCurator && <Wallet className="w-3 h-3" />}
+                    {curatorClaiming ? "Claiming…" : !connected ? "Connect Wallet to Claim" : "Claim Curator Reward"}
+                  </button>
+                );
+              })()}
+            </div>}
 
             {/* Claim confirmation modal */}
             <AnimatePresence>
@@ -476,6 +557,74 @@ function TokenDetailsPage() {
                         className="flex-1 rounded-xl bg-[#00FFD1] hover:bg-[#00FFD1]/85 text-black text-sm font-bold py-2.5 transition-all cursor-pointer disabled:opacity-50"
                       >
                         {claiming ? "Claiming…" : "Yes, Claim"}
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Curator claim confirmation modal */}
+            <AnimatePresence>
+              {showCuratorClaimConfirm && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center px-4"
+                >
+                  <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowCuratorClaimConfirm(false)} />
+                  <motion.div
+                    initial={{ scale: 0.95, y: 8 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.95, y: 8 }}
+                    className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0e0e0e] shadow-2xl p-6 space-y-4"
+                  >
+                    <button
+                      onClick={() => setShowCuratorClaimConfirm(false)}
+                      className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                        <Wallet className="w-4 h-4 text-white/60" />
+                      </div>
+                      <h3 className="text-base font-bold text-white">Confirm Curator Claim</h3>
+                    </div>
+
+                    <p className="text-sm text-white/60 leading-relaxed">
+                      Claim your 0.15% curator reward for tokenizing this post.
+                    </p>
+
+                    <div className="rounded-xl bg-white/[0.04] border border-white/[0.08] p-3 space-y-1">
+                      <p className="text-[10px] text-white/35 uppercase tracking-widest font-semibold">Receiving wallet</p>
+                      <p className="text-xs font-mono text-white/80 break-all">
+                        {publicKey?.toBase58()}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 flex items-start gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-white/40 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-white/40 leading-relaxed">
+                        This wallet must match the address you entered when you launched this token.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        onClick={() => setShowCuratorClaimConfirm(false)}
+                        className="flex-1 rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 text-sm text-white/60 hover:text-white py-2.5 transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={curatorClaiming}
+                        onClick={handleCuratorClaim}
+                        className="flex-1 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white text-sm font-bold py-2.5 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {curatorClaiming ? "Claiming…" : "Yes, Claim"}
                       </button>
                     </div>
                   </motion.div>

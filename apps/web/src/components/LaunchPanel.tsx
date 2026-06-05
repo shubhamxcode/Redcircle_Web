@@ -80,6 +80,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
   const [tokenName, setTokenName]   = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
   const [description, setDescription] = useState("");
+  const [curatorWallet, setCuratorWallet] = useState("");
   const [step, setStep]             = useState<LaunchStep>("idle");
   const [error, setError]           = useState("");
   const [launchId, setLaunchId]     = useState<string | null>(null);
@@ -182,15 +183,16 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          redditPostId:    postPreview.redditPostId,
-          redditUrl:       postPreview.url,
-          redditTitle:     postPreview.title,
-          redditAuthor:    postPreview.author,
-          redditThumbnail: postPreview.thumbnail,
+          redditPostId:         postPreview.redditPostId,
+          redditUrl:            postPreview.url,
+          redditTitle:          postPreview.title,
+          redditAuthor:         postPreview.author,
+          redditThumbnail:      postPreview.thumbnail,
           tokenName,
-          tokenSymbol:     tokenSymbol.toUpperCase(),
+          tokenSymbol:          tokenSymbol.toUpperCase(),
           description,
-          imageUrl:        postPreview.thumbnail,
+          imageUrl:             postPreview.thumbnail,
+          curatorWalletAddress: curatorWallet.trim() || undefined,
         }),
       });
       const prepData = await prepRes.json();
@@ -207,7 +209,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
 
   const reset = () => {
     setUrl(""); setPostPreview(null); setQuote(null);
-    setTokenName(""); setTokenSymbol(""); setDescription("");
+    setTokenName(""); setTokenSymbol(""); setDescription(""); setCuratorWallet("");
     setStep("idle"); setError(""); setLaunchId(null); setMintAddress(null);
     setRocketGone(false);
   };
@@ -518,6 +520,22 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
                         rows={2}
                         className="w-full bg-black/60 border border-white/[0.07] rounded-lg px-3 py-2.5 text-white/80 text-sm placeholder:text-white/15 focus:outline-none focus:border-[#E8431C]/30 focus:shadow-[0_0_0_1px_rgba(232,67,28,0.1)] transition-all resize-none font-mono text-xs"
                       />
+                    </div>
+
+                    {/* Step 3 — Curator Wallet (optional) */}
+                    <div className="space-y-2">
+                      <SectionLabel n={3} text="Curator Wallet (Optional)" />
+                      <TerminalInput
+                        value={curatorWallet}
+                        onChange={setCuratorWallet}
+                        placeholder="Your Solana wallet address"
+                        mono
+                      />
+                      <p className="text-[10px] font-mono text-white/25 leading-relaxed px-0.5">
+                        Enter your Solana wallet to identify yourself as the curator of this token.
+                        <span className="text-[#00FFD1]/50"> No funds will be deducted</span> — this is only used
+                        to send you your 0.15% curator reward from trading fees.
+                      </p>
                     </div>
 
                   </div>

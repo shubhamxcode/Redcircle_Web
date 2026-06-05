@@ -49,7 +49,8 @@ export const posts = pgTable("posts", {
   
   // Creator/Curator Info
   creatorId: uuid("creator_id").references(() => users.id), // null for wallet-only launches
-  creatorRewards: numeric("creator_rewards", { precision: 18, scale: 9 }).default("0").notNull(), // Rewards earned
+  creatorRewards: numeric("creator_rewards", { precision: 18, scale: 9 }).default("0").notNull(),
+  curatorRewards: numeric("curator_rewards", { precision: 18, scale: 9 }).default("0").notNull(),
   
   // Metadata
   tags: text("tags").array(), // Optional tags for categorization

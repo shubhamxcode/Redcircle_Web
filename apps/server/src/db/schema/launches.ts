@@ -59,10 +59,14 @@ export const launches = pgTable("launches", {
   status: launchStatusEnum("status").default("preparing").notNull(),
   errorMessage: text("error_message"),
 
-  // Creator earnings ledger (bps of trading volume)
-  partnerFeeBps: integer("partner_fee_bps").default(105),  // 1.05% — full partner bucket (Redcircle + Creator)
-  creatorFeeBps: integer("creator_fee_bps").default(50),   // 0.50% — creator share
-  platformFeeBps: integer("platform_fee_bps").default(55), // 0.55% — Redcircle share
+  // Earnings ledger (bps of trading volume, within the 1.05% partner bucket)
+  partnerFeeBps: integer("partner_fee_bps").default(105),  // 1.05% — full partner bucket
+  creatorFeeBps: integer("creator_fee_bps").default(40),   // 0.40% — Reddit post author
+  curatorFeeBps: integer("curator_fee_bps").default(15),   // 0.15% — curator (tokenizer)
+  platformFeeBps: integer("platform_fee_bps").default(50), // 0.50% — Redcircle platform
+
+  // Curator identity — wallet entered at launch time for later reward claims
+  curatorWalletAddress: text("curator_wallet_address"),
 
   // On-chain settlement
   launchSignature:        text("launch_signature"),

@@ -5,15 +5,13 @@ import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import { getOrCreateAssociatedTokenAccount, transfer, getAccount } from "@solana/spl-token";
 import bs58 from "bs58";
 import { db } from "../db";
-import { posts, launches, users } from "../db";
-import { authenticateToken } from "../middleware/auth";
+import { posts, launches } from "../db";
 import { resolvePostById } from "../db/helpers";
 import * as Orynth from "../services/orynth.service";
 
 const router: express.Router = express.Router();
 
-// USDC on Solana mainnet
-const USDC_MINT    = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+const USDC_MINT     = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 const USDC_DECIMALS = 6;
 
 function getRewardKeypair(): Keypair {
@@ -22,7 +20,6 @@ function getRewardKeypair(): Keypair {
   return Keypair.fromSecretKey(bs58.decode(key));
 }
 
-// Singleton connection — reused across requests to avoid repeated WebSocket churn
 let _connection: Connection | null = null;
 function getConnection(): Connection {
   if (!_connection) {
@@ -32,65 +29,34 @@ function getConnection(): Connection {
   return _connection;
 }
 
-// ─── POST /api/reward ─────────────────────────────────────────────────────────
-// Transfers the creator's USDC share from the RedCircle reward wallet to their
-// Solana wallet. Auth required; caller must be the original Reddit post author.
-//
-// Race-condition protection: we write the new creatorRewards value to the DB
-// BEFORE the on-chain transfer (optimistic lock). If two requests arrive
-// simultaneously only one will succeed the conditional WHERE clause. If the
-// transfer itself fails, we roll back the DB value so the creator can retry.
+// ─── POST /api/curator-reward ─────────────────────────────────────────────────
+// Transfers the curator's USDC share to the wallet they registered at launch.
+// No auth required — the curator's wallet address IS their identity token.
+// The provided walletAddress must match the curatorWalletAddress stored on the
+// launch record; if it doesn't match, the request is rejected.
 
-router.post("/", authenticateToken, async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   try {
     const { tokenId, walletAddress } = z
       .object({
         tokenId:       z.string().min(1),
-        walletAddress: z.string().min(32),
+        walletAddress: z.string().min(32).max(44),
       })
       .parse(req.body);
 
-    const userId = req.userId;
-    if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
-
-    // 1. Verify caller
-    const [dbUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    if (!dbUser) {
-      return res.status(401).json({ success: false, error: "User not found" });
-    }
-
-    // 2. Resolve post
+    // 1. Resolve post
     const post = await resolvePostById(tokenId);
     if (!post) {
       return res.status(404).json({ success: false, error: "Post not found" });
     }
 
-    // 3. Only the original Reddit post author can claim
-    if (!dbUser.username || dbUser.username.toLowerCase() !== post.author.toLowerCase()) {
-      return res.status(403).json({
-        success: false,
-        error: "Only the original post creator can claim rewards",
-      });
-    }
-
-    // 4. Validate destination wallet
-    let destPubkey: PublicKey;
-    try {
-      destPubkey = new PublicKey(walletAddress);
-    } catch {
-      return res.status(400).json({ success: false, error: "Invalid Solana wallet address" });
-    }
-
-    // 5. Calculate claimable earnings from Orynth
+    // 2. Find the confirmed launch and verify curator wallet
     const [launch] = await db
       .select({
-        poolAddress:   launches.poolAddress,
-        creatorFeeBps: launches.creatorFeeBps,
-        partnerFeeBps: launches.partnerFeeBps,
+        poolAddress:          launches.poolAddress,
+        curatorFeeBps:        launches.curatorFeeBps,
+        partnerFeeBps:        launches.partnerFeeBps,
+        curatorWalletAddress: launches.curatorWalletAddress,
       })
       .from(launches)
       .where(
@@ -105,6 +71,29 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "No active pool found for this token" });
     }
 
+    if (!launch.curatorWalletAddress) {
+      return res.status(400).json({
+        success: false,
+        error: "No curator wallet was registered at launch time. Curator rewards are not claimable for this token.",
+      });
+    }
+
+    if (launch.curatorWalletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: "Wallet address does not match the curator wallet registered at launch.",
+      });
+    }
+
+    // 3. Validate destination wallet
+    let destPubkey: PublicKey;
+    try {
+      destPubkey = new PublicKey(walletAddress);
+    } catch {
+      return res.status(400).json({ success: false, error: "Invalid Solana wallet address" });
+    }
+
+    // 4. Calculate claimable curator earnings from Orynth
     const earningsRes = await Orynth.getEarnings([launch.poolAddress]);
     const earning     = earningsRes.earnings?.[0];
     if (!earning) {
@@ -112,29 +101,28 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
     }
 
     const claimableUsdc = parseFloat(earning.claimableUsdc ?? "0");
-    const creatorBps    = launch.creatorFeeBps ?? 50;
+    const curatorBps    = launch.curatorFeeBps ?? 15;
     const partnerBps    = launch.partnerFeeBps ?? 105;
-    const share         = partnerBps > 0 ? creatorBps / partnerBps : 0.5;
-    const creatorUsdc   = claimableUsdc * share;
+    const share         = partnerBps > 0 ? curatorBps / partnerBps : 0;
+    const curatorUsdc   = claimableUsdc * share;
 
-    const alreadyPaid  = parseFloat(post.creatorRewards ?? "0");
-    const amountToSend = Math.max(0, creatorUsdc - alreadyPaid);
+    const alreadyPaid  = parseFloat(post.curatorRewards ?? "0");
+    const amountToSend = Math.max(0, curatorUsdc - alreadyPaid);
 
     if (amountToSend < 0.001) {
-      return res.status(400).json({ success: false, error: "No new earnings to claim yet" });
+      return res.status(400).json({ success: false, error: "No new curator earnings to claim yet" });
     }
 
     const lamports = Math.floor(amountToSend * 10 ** USDC_DECIMALS);
 
-    // 6. Optimistic DB lock — write the new total BEFORE the transfer.
-    //    The WHERE checks the current value so only one concurrent request wins.
+    // 5. Optimistic DB lock
     const [locked] = await db
       .update(posts)
-      .set({ creatorRewards: creatorUsdc.toFixed(6), updatedAt: new Date() })
+      .set({ curatorRewards: curatorUsdc.toFixed(6), updatedAt: new Date() })
       .where(
         and(
           eq(posts.id,             post.id),
-          eq(posts.creatorRewards, post.creatorRewards ?? "0"),
+          eq(posts.curatorRewards, post.curatorRewards ?? "0"),
         ),
       )
       .returning({ id: posts.id });
@@ -142,13 +130,13 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
     if (!locked) {
       return res.status(409).json({
         success: false,
-        error: "A claim is already in progress for this token. Please try again shortly.",
+        error: "A curator claim is already in progress for this token. Please try again shortly.",
       });
     }
 
-    // 7. Transfer USDC — roll back the DB lock if anything fails
-    const connection     = getConnection();
-    const rewardKeypair  = getRewardKeypair();
+    // 6. Transfer USDC
+    const connection    = getConnection();
+    const rewardKeypair = getRewardKeypair();
 
     let signature: string;
     try {
@@ -156,12 +144,10 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
         connection, rewardKeypair, USDC_MINT, rewardKeypair.publicKey,
       );
 
-      // Pre-flight: check platform wallet has enough USDC
       const fromAccount = await getAccount(connection, fromAta.address);
       if (fromAccount.amount < BigInt(lamports)) {
-        // Roll back the optimistic lock
         await db.update(posts)
-          .set({ creatorRewards: (post.creatorRewards ?? "0"), updatedAt: new Date() })
+          .set({ curatorRewards: (post.curatorRewards ?? "0"), updatedAt: new Date() })
           .where(eq(posts.id, post.id));
         return res.status(503).json({
           success: false,
@@ -173,7 +159,7 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
         connection, rewardKeypair, USDC_MINT, destPubkey,
       );
 
-      console.log(`💸 [Reward] Sending ${amountToSend.toFixed(4)} USDC → ${walletAddress}`);
+      console.log(`💸 [CuratorReward] Sending ${amountToSend.toFixed(4)} USDC → ${walletAddress}`);
 
       signature = await transfer(
         connection,
@@ -184,33 +170,31 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
         lamports,
       );
 
-      // Wait for on-chain confirmation before declaring success
       const { value: status } = await connection.confirmTransaction(signature, "confirmed");
       if (status?.err) {
         throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
       }
 
-      console.log(`✅ [Reward] Transfer confirmed: ${signature}`);
+      console.log(`✅ [CuratorReward] Transfer confirmed: ${signature}`);
     } catch (transferErr) {
-      // Roll back the optimistic lock so the creator can retry
       await db.update(posts)
-        .set({ creatorRewards: (post.creatorRewards ?? "0"), updatedAt: new Date() })
+        .set({ curatorRewards: (post.curatorRewards ?? "0"), updatedAt: new Date() })
         .where(eq(posts.id, post.id));
       throw transferErr;
     }
 
     return res.json({
-      success:       true,
+      success: true,
       signature,
-      amount:        amountToSend.toFixed(4),
+      amount:  amountToSend.toFixed(4),
       walletAddress,
     });
   } catch (err) {
-    console.error("❌ [Reward] Error:", err);
+    console.error("❌ [CuratorReward] Error:", err);
     const msg = err instanceof Error ? err.message : "";
     const userMsg = msg.includes("Failed query") || msg.includes("column")
       ? "Something went wrong fetching reward data. Please try again."
-      : msg || "Reward transfer failed";
+      : msg || "Curator reward transfer failed";
     return res.status(500).json({ success: false, error: userMsg });
   }
 });
