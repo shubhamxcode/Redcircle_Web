@@ -2,11 +2,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  TrendingUp, Users, AlertCircle, ArrowRight, Rocket,
-  CheckCircle, Loader2, ExternalLink, Terminal, Check,
+  TrendingUp, Users, AlertCircle, Rocket,
+  CheckCircle, Loader2, ExternalLink, Check, Wallet,
 } from "lucide-react";
 import { fetchWithAuth, getApiUrl } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 
 interface RedditPostPreview {
   redditPostId: string;
@@ -74,13 +76,14 @@ const PARTICLES = [
 ];
 
 export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
+  const { connected, publicKey, disconnect } = useWallet();
+  const { setVisible: openWalletModal } = useWalletModal();
   const [url, setUrl]               = useState(initialUrl || "");
   const [postPreview, setPostPreview] = useState<RedditPostPreview | null>(null);
   const [quote, setQuote]           = useState<Quote | null>(null);
   const [tokenName, setTokenName]   = useState("");
   const [tokenSymbol, setTokenSymbol] = useState("");
   const [description, setDescription] = useState("");
-  const [curatorWallet, setCuratorWallet] = useState("");
   const [step, setStep]             = useState<LaunchStep>("idle");
   const [error, setError]           = useState("");
   const [launchId, setLaunchId]     = useState<string | null>(null);
@@ -192,7 +195,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
           tokenSymbol:          tokenSymbol.toUpperCase(),
           description,
           imageUrl:             postPreview.thumbnail,
-          curatorWalletAddress: curatorWallet.trim() || undefined,
+          curatorWalletAddress: publicKey?.toBase58() ?? undefined,
         }),
       });
       const prepData = await prepRes.json();
@@ -209,7 +212,7 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
 
   const reset = () => {
     setUrl(""); setPostPreview(null); setQuote(null);
-    setTokenName(""); setTokenSymbol(""); setDescription(""); setCuratorWallet("");
+    setTokenName(""); setTokenSymbol(""); setDescription("");
     setStep("idle"); setError(""); setLaunchId(null); setMintAddress(null);
     setRocketGone(false);
   };
@@ -525,15 +528,35 @@ export default function LaunchPanel({ initialUrl }: { initialUrl?: string }) {
                     {/* Step 3 — Curator Wallet (optional) */}
                     <div className="space-y-2">
                       <SectionLabel n={3} text="Curator Wallet (Optional)" />
-                      <TerminalInput
-                        value={curatorWallet}
-                        onChange={setCuratorWallet}
-                        placeholder="Your Solana wallet address"
-                        mono
-                      />
+                      {connected && publicKey ? (
+                        <div className="flex items-center justify-between bg-black/60 border border-white/[0.07] rounded-lg px-3 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                            <span className="text-xs font-mono text-white/70 truncate">
+                              {publicKey.toBase58().slice(0, 6)}...{publicKey.toBase58().slice(-6)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => disconnect().catch(() => {})}
+                            className="text-[10px] font-mono text-white/30 hover:text-red-400 transition-colors shrink-0 ml-2"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openWalletModal(true)}
+                          className="w-full flex items-center gap-2 bg-black/60 border border-white/[0.07] hover:border-white/15 rounded-lg px-3 py-2.5 text-white/40 hover:text-white/60 text-xs font-mono transition-all"
+                        >
+                          <Wallet className="w-3.5 h-3.5 shrink-0" />
+                          Connect wallet for curator rewards
+                        </button>
+                      )}
                       <p className="text-[10px] font-mono text-white/25 leading-relaxed px-0.5">
-                        Enter your Solana wallet to identify yourself as the curator of this token.
-                        <span className="text-[#00FFD1]/50"> No funds will be deducted</span> — this is only used
+                        Connecting identifies you as the curator.
+                        <span className="text-[#00FFD1]/50"> No funds will be deducted</span> — only used
                         to send you your 0.15% curator reward from trading fees.
                       </p>
                     </div>
