@@ -70,10 +70,11 @@ export default function InfoModal({ open, onClose }: InfoModalProps) {
               <div className="space-y-3">
                 <h3 className="text-lg font-bold text-[#FF4500]">Fees & Rewards</h3>
                 <div className="space-y-2 text-sm text-white/70">
-                  <p className="font-bold text-white">2.5% fee on every buy and sell</p>
-                  <p>~0.67% to original post creator (claimable as USDC)</p>
-                  <p>~0.67% to RedCircle</p>
-                  <p>~1.16% to protocol</p>
+                  <p className="font-bold text-white">2% fee on every buy and sell</p>
+                  <p>0.40% to original post creator (claimable as USDC)</p>
+                  <p>0.15% to curator (claimable as USDC)</p>
+                  <p>0.50% to RedCircle</p>
+                  <p>0.95% to protocol (Meteora + Orynth)</p>
                 </div>
               </div>
 
