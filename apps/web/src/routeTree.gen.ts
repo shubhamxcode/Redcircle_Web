@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SocialRouteImport } from './routes/social'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -32,6 +33,11 @@ const TransactionsRoute = TransactionsRouteImport.update({
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SocialRoute = SocialRouteImport.update({
+  id: '/social',
+  path: '/social',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SigninRoute = SigninRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/signin': typeof SigninRoute
+  '/social': typeof SocialRoute
   '/terms': typeof TermsRoute
   '/transactions': typeof TransactionsRoute
   '/token/$tokenId': typeof TokenTokenIdRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/signin': typeof SigninRoute
+  '/social': typeof SocialRoute
   '/terms': typeof TermsRoute
   '/transactions': typeof TransactionsRoute
   '/token/$tokenId': typeof TokenTokenIdRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/signin': typeof SigninRoute
+  '/social': typeof SocialRoute
   '/terms': typeof TermsRoute
   '/transactions': typeof TransactionsRoute
   '/token/$tokenId': typeof TokenTokenIdRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/profile'
     | '/signin'
+    | '/social'
     | '/terms'
     | '/transactions'
     | '/token/$tokenId'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/profile'
     | '/signin'
+    | '/social'
     | '/terms'
     | '/transactions'
     | '/token/$tokenId'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/profile'
     | '/signin'
+    | '/social'
     | '/terms'
     | '/transactions'
     | '/token/$tokenId'
@@ -207,6 +219,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ProfileRoute: typeof ProfileRoute
   SigninRoute: typeof SigninRoute
+  SocialRoute: typeof SocialRoute
   TermsRoute: typeof TermsRoute
   TransactionsRoute: typeof TransactionsRoute
   TokenTokenIdRoute: typeof TokenTokenIdRoute
@@ -226,6 +239,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/social': {
+      id: '/social'
+      path: '/social'
+      fullPath: '/social'
+      preLoaderRoute: typeof SocialRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signin': {
@@ -327,6 +347,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ProfileRoute: ProfileRoute,
   SigninRoute: SigninRoute,
+  SocialRoute: SocialRoute,
   TermsRoute: TermsRoute,
   TransactionsRoute: TransactionsRoute,
   TokenTokenIdRoute: TokenTokenIdRoute,

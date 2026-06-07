@@ -75,8 +75,8 @@ app.get("/api/tokens/:mint/pool", async (req, res) => {
 });
 
 app.get("/api/tokens/:mint/price", async (req, res) => {
+  const { mint } = req.params;
   try {
-    const { mint } = req.params;
 
     // Serve from cache if fresh
     const cached = priceCache.get(mint);
@@ -169,7 +169,7 @@ app.get("/health", (_req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
 	console.error("\n❌ === Global Error Handler ===");
 	console.error("Error:", err);
 	console.error("Path:", req.path);
